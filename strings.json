@@ -1,0 +1,29 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nastavení BMS regulátoru",
+        "description": "Vyberte entity pro ekvitermní regulaci vytápění.",
+        "data": {
+          "target_thermostat":  "Termostat (climate entita)",
+          "outdoor_sensor":     "Venkovní teplotní senzor",
+          "weather_entity":     "Entita počasí (weather)",
+          "sun_entity":         "Entita polohy slunce (sun)"
+        },
+        "data_description": {
+          "target_thermostat":  "Termostat, jehož teplotu bude regulátor nastavovat.",
+          "outdoor_sensor":     "Senzor venkovní teploty — primární zdroj pro výpočet křivky.",
+          "weather_entity":     "Entita počasí pro vlivy větru, srážek, vlhkosti a oblačnosti.",
+          "sun_entity":         "Entita polohy slunce — obvykle sun.sun."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nepodařilo se připojit — zkontrolujte entity.",
+      "unknown":        "Neznámá chyba při nastavení."
+    },
+    "abort": {
+      "already_configured": "BMS regulátor je již nakonfigurován."
+    }
+  }
+}

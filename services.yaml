@@ -1,0 +1,199 @@
+save_profile:
+  name: Uložit profil
+  description: >
+    Uloží aktuální nastavení sezónních entit (křivka, vlivy, noční mód, protimraz, boost)
+    jako pojmenovaný profil. Nastavení integrace (limity, interval přepočtu, bypass) se
+    do profilu neukládají.
+  fields:
+    name:
+      description: Název profilu (nový nebo přepis stávajícího)
+      example: "Silné mrazy"
+      required: true
+      selector:
+        text:
+
+load_profile:
+  name: Načíst profil
+  description: Nastaví sezónní entity podle uloženého profilu. Nastavení integrace zůstane nezměněno.
+  fields:
+    name:
+      description: Název profilu k načtení
+      required: true
+      selector:
+        text:
+
+delete_profile:
+  name: Smazat profil
+  description: Trvale odstraní profil z úložiště.
+  fields:
+    name:
+      description: Název profilu ke smazání
+      required: true
+      selector:
+        text:
+
+set_curve_points:
+  name: Nastavit body křivky
+  description: Uloží celé pole bodů topné křivky do JSON Storage.
+  fields:
+    points:
+      description: "Pole bodů [{x: float, y: float}, ...], min. 2 body, seřazeno vzestupně podle x"
+      example: '[{"x": -20, "y": 70}, {"x": 0, "y": 45}, {"x": 20, "y": 20}]'
+      required: true
+      selector:
+        object:
+
+get_curve_points:
+  name: Načíst body křivky
+  description: Vyšle HA event heating_curve_curve_response s aktuálními body a stavem storage.
+
+retry_storage:
+  name: Znovu zkusit Storage
+  description: Pokusí se znovu zapsat body křivky z paměti do Storage (po výpadku).
+
+activate_boost:
+  name: Aktivovat boost
+  description: Dočasně zvýší teplotu topení o zadaný počet °C na zadaný počet hodin.
+  fields:
+    amount:
+      description: O kolik °C zvýšit teplotu topení (výchozí 5)
+      example: 5
+      required: false
+      selector:
+        number:
+          min: 0.5
+          max: 20
+          step: 0.5
+    hours:
+      description: Jak dlouho boost trvá v hodinách (výchozí 2)
+      example: 2
+      required: false
+      selector:
+        number:
+          min: 0.5
+          max: 24
+          step: 0.5
+
+activate_reduction:
+  name: Aktivovat útlum
+  description: Dočasně sníží teplotu topení o zadaný počet °C na zadaný počet hodin.
+  fields:
+    amount:
+      description: O kolik °C snížit teplotu topení (výchozí 5)
+      example: 5
+      required: false
+      selector:
+        number:
+          min: 0.5
+          max: 20
+          step: 0.5
+    hours:
+      description: Jak dlouho útlum trvá v hodinách (výchozí 2)
+      example: 2
+      required: false
+      selector:
+        number:
+          min: 0.5
+          max: 24
+          step: 0.5
+
+cancel_boost:
+  name: Zrušit boost / útlum
+  description: Okamžitě ukončí aktivní boost nebo útlum.
+
+force_refresh:
+  name: Vynucený refresh
+  description: >
+    Okamžitě přepočítá počasí, vlivy a výslednou teplotu topení.
+    Nastaví termostat a zapíše záznam do výpočetního logu.
+
+set_starred:
+  name: Nastavit rychlé profily
+  description: Nastaví seznam hvězdičkových (rychlých) profilů zobrazovaných v kartě.
+  fields:
+    starred:
+      description: Seznam názvů profilů (max. 15)
+      example: '["Zima", "Jaro/Podzim", "Léto"]'
+      required: true
+      selector:
+        object:
+
+save_schedule:
+  name: Uložit pravidlo plánu
+  description: Přidá nebo aktualizuje pravidlo automatického přepínání profilů.
+  fields:
+    id:
+      description: ID pravidla (prázdné = nové pravidlo)
+      required: false
+      selector:
+        text:
+    type:
+      description: "Typ pravidla: date (datum od–do) nebo temp (teplotní podmínka)"
+      required: true
+      selector:
+        select:
+          options: ["date", "temp"]
+    profile:
+      description: Název profilu který se aktivuje při splnění podmínky
+      required: true
+      selector:
+        text:
+    date_from:
+      description: "Datum začátku ve formátu MM-DD (pro typ date)"
+      example: "11-01"
+      required: false
+      selector:
+        text:
+    date_to:
+      description: "Datum konce ve formátu MM-DD (pro typ date)"
+      example: "03-31"
+      required: false
+      selector:
+        text:
+    temp_op:
+      description: "Operátor porovnání pro teplotní podmínku: < nebo >"
+      required: false
+      selector:
+        select:
+          options: ["<", ">"]
+    temp_val:
+      description: Prahová teplota pro teplotní podmínku (°C)
+      required: false
+      selector:
+        number:
+          min: -30
+          max: 40
+          step: 0.5
+    temp_days:
+      description: Podmínka musí platit alespoň tento počet dní (průměr)
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 30
+          step: 1
+    enabled:
+      description: Zda je pravidlo aktivní (výchozí true)
+      required: false
+      selector:
+        boolean:
+
+delete_schedule:
+  name: Smazat pravidlo plánu
+  description: Odstraní pravidlo automatického přepínání profilů podle jeho ID.
+  fields:
+    id:
+      description: ID pravidla ke smazání
+      required: true
+      selector:
+        text:
+
+reorder_schedules:
+  name: Přeřadit pravidla plánů
+  description: Změní pořadí vyhodnocování pravidel automatického přepínání profilů.
+  fields:
+    order:
+      description: Seznam ID pravidel v novém pořadí
+      required: true
+      selector:
+        object:
