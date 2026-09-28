@@ -9,7 +9,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers import selector
 
-from .const import CONF_OUTDOOR_SENSOR, CONF_SUN, CONF_THERMOSTAT, CONF_WEATHER, DEVICE_NAME, DOMAIN
+from .const import CONF_OUTDOOR_SENSOR, CONF_THERMOSTAT, CONF_WEATHER, DEVICE_NAME, DOMAIN
 
 DATA_SCHEMA = vol.Schema({
     vol.Required(CONF_THERMOSTAT): selector.EntitySelector(
@@ -18,8 +18,6 @@ DATA_SCHEMA = vol.Schema({
         selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
     vol.Required(CONF_WEATHER): selector.EntitySelector(
         selector.EntitySelectorConfig(domain="weather")),
-    vol.Required(CONF_SUN): selector.EntitySelector(
-        selector.EntitySelectorConfig(domain="sun")),
 })
 
 
@@ -27,6 +25,7 @@ class HeatingCurveFlow(ConfigFlow, domain=DOMAIN):
     """Průvodce nastavením BMS regulátoru."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:

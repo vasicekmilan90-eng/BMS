@@ -3,18 +3,16 @@
     "step": {
       "user": {
         "title": "Nastavení BMS regulátoru",
-        "description": "Vyberte entity pro ekvitermní regulaci vytápění.",
+        "description": "Vyberte entity pro ekvitermní regulaci vytápění. Poloha slunce se počítá z polohy Home Assistantu.",
         "data": {
           "target_thermostat": "Termostat (climate entita)",
           "outdoor_sensor": "Venkovní teplotní senzor",
-          "weather_entity": "Entita počasí (weather)",
-          "sun_entity": "Entita polohy slunce (sun)"
+          "weather_entity": "Entita počasí (weather)"
         },
         "data_description": {
           "target_thermostat": "Termostat, jehož teplotu bude regulátor nastavovat.",
           "outdoor_sensor": "Senzor venkovní teploty — primární zdroj pro výpočet křivky.",
-          "weather_entity": "Entita počasí pro vlivy větru, srážek, vlhkosti a oblačnosti.",
-          "sun_entity": "Entita polohy slunce — obvykle sun.sun."
+          "weather_entity": "Entita počasí pro předpověď a vlivy větru, srážek, vlhkosti a oblačnosti."
         }
       },
       "reconfigure": {
@@ -23,14 +21,12 @@
         "data": {
           "target_thermostat": "Termostat (climate entita)",
           "outdoor_sensor": "Venkovní teplotní senzor",
-          "weather_entity": "Entita počasí (weather)",
-          "sun_entity": "Entita polohy slunce (sun)"
+          "weather_entity": "Entita počasí (weather)"
         },
         "data_description": {
           "target_thermostat": "Termostat, jehož teplotu bude regulátor nastavovat.",
           "outdoor_sensor": "Senzor venkovní teploty — primární zdroj pro výpočet křivky.",
-          "weather_entity": "Entita počasí pro vlivy větru, srážek, vlhkosti a oblačnosti.",
-          "sun_entity": "Entita polohy slunce — obvykle sun.sun."
+          "weather_entity": "Entita počasí pro předpověď a vlivy větru, srážek, vlhkosti a oblačnosti."
         }
       }
     },
@@ -45,6 +41,130 @@
     },
     "invalid_curve_points": {
       "message": "Topná křivka potřebuje alespoň 2 body s hodnotami x a y."
+    },
+    "profile_not_found": {
+      "message": "Profil „{name}“ neexistuje."
+    }
+  },
+  "issues": {
+    "missing_thermostat": {
+      "title": "Termostat pro BMS regulátor neexistuje",
+      "description": "Entita {entity_id} nebyla nalezena, regulátor proto nemůže nastavovat teplotu. Opravte ji přes Nastavení → Zařízení a služby → BMS regulátor → Znovu nakonfigurovat."
+    },
+    "missing_outdoor_sensor": {
+      "title": "Venkovní senzor pro BMS regulátor neexistuje",
+      "description": "Entita {entity_id} nebyla nalezena. Regulátor použije teplotu z počasí nebo bezpečnou teplotu. Opravte ji přes Znovu nakonfigurovat."
+    },
+    "missing_weather": {
+      "title": "Entita počasí pro BMS regulátor neexistuje",
+      "description": "Entita {entity_id} nebyla nalezena, vlivy počasí a předpověď jsou nedostupné. Opravte ji přes Znovu nakonfigurovat."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "problem": { "name": "Problém regulace" }
+    },
+    "number": {
+      "safe_temp": { "name": "Bezpečná venkovní teplota" },
+      "rozsah_venku_min": { "name": "Rozsah venku: Min" },
+      "rozsah_venku_max": { "name": "Rozsah venku: Max" },
+      "limit_min": { "name": "Limit termostatu: Min" },
+      "limit_max": { "name": "Limit termostatu: Max" },
+      "predpoved_hodin": { "name": "Předpověď: Výhled" },
+      "vitr_predpoved_hodin": { "name": "Vítr: Výhled předpovědi" },
+      "srazky_predpoved_hodin": { "name": "Srážky: Výhled předpovědi" },
+      "vlhkost_predpoved_hodin": { "name": "Vlhkost: Výhled předpovědi" },
+      "oblacnost_predpoved_hodin": { "name": "Oblačnost: Výhled předpovědi" },
+      "slunce_predpoved_hodin": { "name": "Slunce: Výhled předpovědi" },
+      "frost_threshold": { "name": "Protimraz: Práh teploty" },
+      "frost_min_heat": { "name": "Protimraz: Min. topení" },
+      "night_offset": { "name": "Noční mód: Posun křivky" },
+      "day_start": { "name": "Noční mód: Začátek dne" },
+      "day_end": { "name": "Noční mód: Konec dne" },
+      "boost_amount": { "name": "Boost: Přídavek" },
+      "boost_hours": { "name": "Boost: Trvání" },
+      "reduction_amount": { "name": "Útlum: Snížení" },
+      "reduction_hours": { "name": "Útlum: Trvání" },
+      "vitr_od": { "name": "Vítr: Účinek od" },
+      "vitr_do": { "name": "Vítr: Plný účinek od" },
+      "vitr_max_eff": { "name": "Vítr: Max. korekce" },
+      "srazky_od": { "name": "Srážky: Účinek od" },
+      "srazky_do": { "name": "Srážky: Plný účinek od" },
+      "srazky_max_eff": { "name": "Srážky: Max. korekce" },
+      "vlhkost_od": { "name": "Vlhkost: Účinek od" },
+      "vlhkost_do": { "name": "Vlhkost: Plný účinek od" },
+      "vlhkost_max_eff": { "name": "Vlhkost: Max. korekce" },
+      "oblacnost_od": { "name": "Oblačnost: Účinek od" },
+      "oblacnost_do": { "name": "Oblačnost: Plný účinek od" },
+      "oblacnost_max_eff": { "name": "Oblačnost: Max. korekce" },
+      "solarni_start": { "name": "Solární okno: Začátek" },
+      "solarni_konec": { "name": "Solární okno: Konec" },
+      "slunce_max_eff": { "name": "Slunce: Max. korekce" },
+      "prepocet_interval": { "name": "Přepočet: Interval" },
+      "prepocet_delta": { "name": "Přepočet: Změna teploty" },
+      "letni_bypass_temp": { "name": "Letní bypass: Teplota" },
+      "safe_curve_outdoor": { "name": "Bezpečný bod: Venkovní" },
+      "safe_curve_temp": { "name": "Bezpečný bod: Topení" }
+    },
+    "switch": {
+      "hlavni_vypinac": { "name": "Hlavní vypínač" },
+      "pouziti_predpovedi": { "name": "Použití předpovědi" },
+      "vliv_vitr": { "name": "Vliv: Vítr" },
+      "vliv_srazky": { "name": "Vliv: Srážky" },
+      "vliv_vlhkost": { "name": "Vliv: Vlhkost" },
+      "vliv_oblacnost": { "name": "Vliv: Oblačnost" },
+      "vliv_slunce": { "name": "Vliv: Pozice slunce" },
+      "frost_protection": { "name": "Protimrazová ochrana" },
+      "night_mode": { "name": "Noční mód" },
+      "letni_bypass": { "name": "Letní bypass" },
+      "vitr_predpoved": { "name": "Vítr: Použít předpověď" },
+      "srazky_predpoved": { "name": "Srážky: Použít předpověď" },
+      "vlhkost_predpoved": { "name": "Vlhkost: Použít předpověď" },
+      "oblacnost_predpoved": { "name": "Oblačnost: Použít předpověď" }
+    },
+    "select": {
+      "profil_krivky": { "name": "Profil křivky" },
+      "prepocet_rezim": {
+        "name": "Přepočet: Režim",
+        "state": {
+          "cas": "Podle času",
+          "teplota": "Podle změny teploty",
+          "oboji": "Čas i teplota"
+        }
+      }
+    },
+    "sensor": {
+      "calc_temp": { "name": "Výsledná teplota" },
+      "applied_out_temp": { "name": "Venkovní teplota použitá" },
+      "raw_outdoor_temp": { "name": "Venkovní teplota naměřená" },
+      "curve_temp": { "name": "Teplota ze křivky" },
+      "total_correction": { "name": "Celková korekce" },
+      "clamped_temp": { "name": "Výsledná po limitu" },
+      "actual_wind": { "name": "Aktuální vítr" },
+      "actual_rain": { "name": "Aktuální srážky" },
+      "actual_clouds": { "name": "Aktuální oblačnost" },
+      "actual_humidity": { "name": "Aktuální vlhkost" },
+      "forecast_wind": { "name": "Předpověď vítr" },
+      "forecast_rain": { "name": "Předpověď srážky" },
+      "forecast_clouds": { "name": "Předpověď oblačnost" },
+      "forecast_humidity": { "name": "Předpověď vlhkost" },
+      "forecast_temp": { "name": "Předpověď teplota" },
+      "sun_elevation": { "name": "Elevace slunce" },
+      "sun_azimuth": { "name": "Azimut slunce" },
+      "actual_sun_elevation": { "name": "Aktuální elevace slunce" },
+      "actual_sun_azimuth": { "name": "Aktuální azimut slunce" },
+      "forecast_sun_elevation": { "name": "Předpověď elevace slunce" },
+      "forecast_sun_azimuth": { "name": "Předpověď azimut slunce" },
+      "corr_wind": { "name": "Korekce vítr" },
+      "corr_rain": { "name": "Korekce srážky" },
+      "corr_humidity": { "name": "Korekce vlhkost" },
+      "corr_clouds": { "name": "Korekce oblačnost" },
+      "corr_sun": { "name": "Korekce slunce" },
+      "curve_storage_status": { "name": "Úložiště křivky" },
+      "temp_source": { "name": "Zdroj venkovní teploty" },
+      "boost_status": { "name": "Boost / útlum" },
+      "weather_status": { "name": "Stav počasí" },
+      "influences_log": { "name": "Log vnějších vlivů" }
     }
   },
   "services": {

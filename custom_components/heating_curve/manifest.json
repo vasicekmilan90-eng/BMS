@@ -4,12 +4,12 @@
   "after_dependencies": ["recorder"],
   "codeowners": ["@vasicekmilan90-eng"],
   "config_flow": true,
-  "dependencies": ["frontend", "http"],
+  "dependencies": ["frontend", "http", "websocket_api"],
   "documentation": "https://github.com/vasicekmilan90-eng/BMS",
   "integration_type": "device",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/vasicekmilan90-eng/BMS/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
