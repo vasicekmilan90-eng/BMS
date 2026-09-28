@@ -5,6 +5,8 @@ import logging
 import math
 from datetime import datetime, timedelta, timezone
 
+from astral import sun as astral_sun
+
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import get_significant_states
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
@@ -16,7 +18,7 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
 )
-from homeassistant.helpers.sun import get_astral_location
+from homeassistant.helpers.sun import get_astral_observer
 from homeassistant.util import dt as dt_util
 
 from . import HeatingCurveConfigEntry
@@ -432,9 +434,9 @@ class BMSResultSensor(BMSSensorBase):
             try:
                 offset_h_sun = int(self._num("predpoved_hodin", 24))
                 future_dt    = datetime.now(timezone.utc) + timedelta(hours=offset_h_sun)
-                location, _  = get_astral_location(self._hass)
-                fc_el = location.solar_elevation(future_dt)
-                fc_az = location.solar_azimuth(future_dt)
+                observer     = get_astral_observer(self._hass)
+                fc_el = astral_sun.elevation(observer, future_dt)
+                fc_az = astral_sun.azimuth(observer, future_dt)
                 _LOGGER.debug("BMS: Slunce (předpověď +%dh): el=%.1f° az=%.1f°", offset_h_sun, fc_el, fc_az)
             except Exception as e:
                 _LOGGER.warning("BMS: Nelze vypočítat předpovězené slunce: %s", e)
@@ -798,11 +800,10 @@ class BMSTempSourceSensor(BMSSensorBase):
     def extra_state_attributes(self) -> dict:
         data = self._entry.runtime_data
         source = data.get("temp_source", TEMP_SOURCE_SAFE)
-        safe_s = self._hass.states.get("number.bms_safe_temp")
         return {
             "source_key":  source,
             "is_fallback": source != TEMP_SOURCE_SENSOR,
-            "safe_temp":   float(safe_s.state) if safe_s else DEFAULT_SAFE_OUTDOOR_TEMP,
+            "safe_temp":   self._num("safe_temp", DEFAULT_SAFE_OUTDOOR_TEMP),
         }
 
     @property
