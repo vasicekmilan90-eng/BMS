@@ -30,7 +30,7 @@ nebo v YAML:
 type: custom:bms-master-card
 ```
 
-## Přechod ze starší verze (2.x)
+## Přechod ze staršího ručního nasazení
 
 - Odstraňte starou ruční registraci karty (*Nastavení → Dashboardy → ⋮ → Zdroje*,
   typicky `/local/community/BMS/card.js`) a staré soubory v `www/community/BMS/`.
