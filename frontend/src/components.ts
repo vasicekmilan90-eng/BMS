@@ -22,14 +22,37 @@ export interface CardContext {
   canAct: boolean;
 }
 
-export function notify(el: HTMLElement, message: string): void {
-  el.dispatchEvent(new CustomEvent("hass-notification", { detail: { message }, bubbles: true, composed: true }));
+export function notify(el: HTMLElement, message: string, action?: { text: string; action: () => void }): void {
+  el.dispatchEvent(new CustomEvent("hass-notification", {
+    detail: action ? { message, action, duration: 6000 } : { message }, bubbles: true, composed: true,
+  }));
 }
 
-export class BmsSection extends LitElement {
+/** Změna nastavení s možností „Vrátit“ v oznámení. */
+export async function setWithUndo(
+  el: HTMLElement, ctx: CardContext, key: string, value: SettingValue, label?: string,
+): Promise<boolean> {
+  const previous = ctx.snap.settings[key];
+  try {
+    await ctx.store.setSetting(key, value);
+  } catch (err) {
+    notify(el, ctx.t("error.action", { message: (err as Error)?.message ?? String(err) }));
+    return false;
+  }
+  if (previous !== undefined && previous !== value) {
+    notify(el, ctx.t("common.changed", { name: label ?? ctx.t(`setting.${key}`) }), {
+      text: ctx.t("common.undo"),
+      action: () => void ctx.store.setSetting(key, previous).catch(() => undefined),
+    });
+  }
+  return true;
+}
+
+export class BmsSection<O = unknown> extends LitElement {
   static styles: CSSResultGroup = baseStyles;
 
   @property({ attribute: false }) ctx!: CardContext;
+  @property({ attribute: false }) options!: O;
 
   protected get snap(): Snapshot {
     return this.ctx.snap;
@@ -59,13 +82,16 @@ export class BmsSection extends LitElement {
     }
   }
 
-  protected setSetting(key: string, value: SettingValue): Promise<boolean> {
-    return this.run(() => this.ctx.store.setSetting(key, value));
+  protected setSetting(key: string, value: SettingValue, label?: string): Promise<boolean> {
+    return setWithUndo(this, this.ctx, key, value, label);
   }
 
   protected moreInfo(name: string): void {
     const entityId = this.ctx.snap.entities[name];
-    if (!entityId) return;
+    if (entityId) this.moreInfoEntity(entityId);
+  }
+
+  protected moreInfoEntity(entityId: string): void {
     this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true }));
   }
 }
@@ -106,9 +132,7 @@ export class BmsNumber extends LitElement {
     const value = Math.min(this.meta.max, Math.max(this.meta.min, parsed));
     this.saving = true;
     try {
-      await this.ctx.store.setSetting(this.key, value);
-    } catch (err) {
-      notify(this, this.ctx.t("error.action", { message: (err as Error)?.message ?? String(err) }));
+      await setWithUndo(this, this.ctx, this.key, value, this.label);
     } finally {
       this.saving = false;
     }
@@ -150,6 +174,8 @@ export class BmsToggle extends LitElement {
   @property({ attribute: false }) ctx!: CardContext;
   @property() key = "";
   @property() label = "";
+  /** Popis pro oznámení „Vrátit“, když je `label` obecný („Zapnuto“). */
+  @property() name = "";
 
   protected render() {
     const checked = Boolean(this.ctx.snap.settings[this.key]);
@@ -162,12 +188,7 @@ export class BmsToggle extends LitElement {
           aria-label=${this.label}
           @change=${async (e: Event) => {
             const target = e.target as HTMLInputElement;
-            try {
-              await this.ctx.store.setSetting(this.key, target.checked);
-            } catch (err) {
-              target.checked = checked;
-              notify(this, this.ctx.t("error.action", { message: (err as Error)?.message ?? String(err) }));
-            }
+            if (!(await setWithUndo(this, this.ctx, this.key, target.checked, this.name || this.label))) target.checked = checked;
           }}
         ></ha-switch>
       </div>

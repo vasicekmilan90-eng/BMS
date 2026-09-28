@@ -1,47 +1,114 @@
 import { describe, expect, it } from "vitest";
 
-import { canEdit, estimateRows, normalizeConfig, visibleSections, SECTIONS } from "../src/config";
+import { checkConditions, conditionEntities, mediaQueries } from "../src/conditions";
+import { SECTIONS, canEdit, compactSection, estimateRows, makeSection, normalizeConfig } from "../src/config";
 
-describe("normalizeConfig", () => {
-  it("prázdná konfigurace = všechny sekce", () => {
-    const c = normalizeConfig({ type: "custom:bms-master-card" }, SECTIONS);
-    expect(c.sections).toEqual([...SECTIONS]);
-    expect(c.collapsed).toEqual(["log", "settings"]);
-    expect(c.admin_only_settings).toBe(true);
+const types = (config: Parameters<typeof normalizeConfig>[0], defaults?: readonly string[]) =>
+  normalizeConfig(config, defaults).sections.map((s) => s.type);
+
+describe("konfigurace", () => {
+  it("výchozí sekce a volby", () => {
+    const c = normalizeConfig({ type: "x" });
+    expect(c.sections.map((s) => s.type)).toEqual([...SECTIONS]);
+    expect(c.layout).toBe("auto");
+    const log = c.sections.find((s) => s.type === "log")!;
+    expect(log.collapsed).toBe(true);
+    expect(c.sections.find((s) => s.type === "profiles")!.admin_only).toBe(true);
+    expect(c.sections.find((s) => s.type === "influences")!.span).toBe(1);
+    expect(normalizeConfig({ type: "x", sections: [{ type: "curve", span: 2 }] }).sections[0].span).toBe(2);
   });
 
-  it("zachová pořadí, odstraní neznámé a duplicitní sekce", () => {
-    const c = normalizeConfig({ type: "x", sections: ["curve", "nope", "status", "curve"] as never }, SECTIONS);
-    expect(c.sections).toEqual(["curve", "status"]);
+  it("volby sekcí se ověří", () => {
+    const c = normalizeConfig({ type: "x", sections: [
+      { type: "actions", durations: [1, "3", -1, 99], directions: ["boost", "nesmysl"] },
+      { type: "curve", editor: "shift", range: [10, -10] },
+      { type: "log", limit: 500, filter: "writes" },
+    ] });
+    const [actions, curve, log] = c.sections;
+    expect(actions.type === "actions" && actions.durations).toEqual([1, 3]);
+    expect(actions.type === "actions" && actions.directions).toEqual(["boost"]);
+    expect(curve.type === "curve" && curve.editor).toBe("shift");
+    expect(curve.type === "curve" && curve.range).toBeUndefined();
+    expect(log.type === "log" && [log.limit, log.filter]).toEqual([20, "writes"]);
   });
 
-  it("samostatná karta použije své výchozí sekce", () => {
-    expect(normalizeConfig({ type: "x" }, ["modes"]).sections).toEqual(["modes"]);
+  it("převod zápisu z 0.2", () => {
+    const c = normalizeConfig({
+      type: "x",
+      sections: ["status", "modes", "quick_profiles", "profiles", "schedules", "curve"],
+      modes: ["boost", "night"],
+      collapsed: ["modes", "schedules"],
+      curve_editor: false,
+    } as never);
+    expect(c.sections.map((s) => s.type)).toEqual(["status", "actions", "automations", "profiles", "curve"]);
+    const [, actions, autos, profiles, curve] = c.sections;
+    expect(actions.type === "actions" && [actions.show, actions.directions]).toEqual([["temporary", "profiles"], ["boost"]]);
+    expect(autos.type === "automations" && autos.items).toEqual(["night"]);
+    expect(profiles.type === "profiles" && profiles.tabs).toEqual(["manage", "schedules"]);
+    expect(curve.type === "curve" && curve.editor).toBe("none");
+    expect([actions.collapsed, profiles.collapsed, curve.collapsed]).toEqual([true, true, false]);
+    expect(c.warnings).toEqual([]);
   });
 
-  it("odmítne nesmyslnou konfiguraci", () => {
-    expect(() => normalizeConfig("x" as never, SECTIONS)).toThrow();
+  it("staré samostatné karty", () => {
+    expect(types({ type: "x" }, ["modes"])).toEqual(["actions", "automations"]);
+    expect(types({ type: "x" }, ["quick_profiles", "profiles", "schedules"])).toEqual(["actions", "profiles"]);
+    expect(types({ type: "x", sections: ["profiles"], modes: ["boost"] } as never)).toEqual(["profiles"]);
   });
-});
 
-describe("oprávnění", () => {
-  const base = normalizeConfig({ type: "x" }, SECTIONS);
-  it("ne-admin nevidí správu", () => {
-    expect(visibleSections(base, false)).not.toContain("settings");
-    expect(visibleSections(base, true)).toContain("settings");
-    expect(canEdit(base, false)).toBe(false);
+  it("předvolby a neznámé položky", () => {
+    expect(types({ type: "x", preset: "family" })).toEqual(["status", "actions", "automations"]);
+    const overview = normalizeConfig({ type: "x", preset: "overview" });
+    expect(overview.read_only).toBe(true);
+    expect(canEdit(overview, true)).toBe(false);
+    const c = normalizeConfig({ type: "x", sections: ["status", "nesmysl", "status"] as never });
+    expect(c.warnings).toEqual(["unknown:nesmysl", "duplicate:status"]);
   });
-  it("read_only vypne úpravy i adminovi", () => {
-    expect(canEdit(normalizeConfig({ type: "x", read_only: true }, SECTIONS), true)).toBe(false);
-  });
-  it("admin_only_settings: false zpřístupní vše", () => {
-    const c = normalizeConfig({ type: "x", admin_only_settings: false }, SECTIONS);
-    expect(visibleSections(c, false)).toEqual([...SECTIONS]);
+
+  it("práva a admin_only_settings", () => {
+    const c = normalizeConfig({ type: "x", admin_only_settings: false });
+    expect(c.sections.every((s) => !s.admin_only)).toBe(true);
     expect(canEdit(c, false)).toBe(true);
+    expect(canEdit(normalizeConfig({ type: "x" }), false)).toBe(false);
+  });
+
+  it("kompaktní zápis pro editor", () => {
+    expect(compactSection(makeSection("log"))).toBe("log");
+    expect(compactSection(makeSection("log", { limit: 5 }))).toEqual({ type: "log", limit: 5 });
+    expect(compactSection(makeSection("settings", {}, undefined, false), false)).toBe("settings");
+  });
+
+  it("odhad výšky", () => {
+    expect(estimateRows([{ type: "status", collapsed: false }], false)).toBe(4);
+    expect(estimateRows([{ type: "log", collapsed: true }], true)).toBe(2);
   });
 });
 
-it("estimateRows", () => {
-  expect(estimateRows(["status"], false)).toBe(3);
-  expect(estimateRows(["curve", "influences"], true)).toBe(8);
+describe("podmínky viditelnosti", () => {
+  const env = {
+    states: { "input_boolean.host": { state: "on" }, "sensor.t": { state: "12.5" } },
+    userId: "u1",
+    matches: (q: string) => q === "(max-width: 767px)",
+  };
+  it("jednotlivé typy", () => {
+    expect(checkConditions([], env)).toBe(true);
+    expect(checkConditions([{ condition: "state", entity: "input_boolean.host", state: "on" }], env)).toBe(true);
+    expect(checkConditions([{ condition: "state", entity: "input_boolean.host", state_not: ["on"] }], env)).toBe(false);
+    expect(checkConditions([{ condition: "numeric_state", entity: "sensor.t", above: 10, below: 20 }], env)).toBe(true);
+    expect(checkConditions([{ condition: "screen", media_query: "(max-width: 767px)" }], env)).toBe(true);
+    expect(checkConditions([{ condition: "user", users: ["u2"] }], env)).toBe(false);
+    expect(checkConditions([{ condition: "state", entity: "sensor.neni", state: "on" }], env)).toBe(false);
+  });
+  it("and / or a sběr závislostí", () => {
+    const conds = [{ condition: "or" as const, conditions: [
+      { condition: "user" as const, users: ["u2"] },
+      { condition: "and" as const, conditions: [
+        { condition: "screen" as const, media_query: "(min-width: 768px)" },
+        { condition: "state" as const, entity: "input_boolean.host", state: "on" },
+      ] },
+    ] }];
+    expect(checkConditions(conds, env)).toBe(false);
+    expect(mediaQueries(conds)).toEqual(["(min-width: 768px)"]);
+    expect(conditionEntities(conds)).toEqual(["input_boolean.host"]);
+  });
 });

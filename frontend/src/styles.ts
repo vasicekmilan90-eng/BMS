@@ -89,4 +89,31 @@ export const baseStyles = css`
   dialog .field input, dialog .field select { width: 100%; }
   dialog .actions { justify-content: flex-end; margin-top: 16px; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .icon-btn {
+    border: none; background: none; cursor: pointer; color: var(--bms-muted); padding: 4px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .icon-btn:hover:not(:disabled) { color: var(--primary-text-color); background: var(--bms-surface); }
+  .icon-btn:focus-visible { outline: 2px solid var(--primary-color); }
+  .icon-btn:disabled { opacity: 0.3; cursor: default; }
+  .icon-btn ha-icon { --mdc-icon-size: 18px; }
+  .seg { display: inline-flex; border: 1px solid var(--bms-border); border-radius: 18px; overflow: hidden; }
+  .seg button {
+    font: inherit; font-size: var(--ha-font-size-s, 13px); border: none; background: transparent; cursor: pointer;
+    padding: 6px 14px; color: var(--primary-text-color); display: inline-flex; align-items: center; gap: 4px;
+  }
+  .seg button + button { border-left: 1px solid var(--bms-border); }
+  .seg button[aria-pressed="true"], .seg button[aria-selected="true"] {
+    background: color-mix(in srgb, var(--primary-color) 16%, transparent); color: var(--primary-color); font-weight: 500;
+  }
+  .seg button:disabled { opacity: 0.45; cursor: default; }
+  .seg button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+  .seg ha-icon { --mdc-icon-size: 16px; }
+  button.chip { cursor: pointer; font: inherit; font-size: var(--ha-font-size-xs, 11px); font-weight: 500; color: inherit; }
+  button.chip[aria-pressed="true"] { border-color: var(--primary-color); color: var(--primary-color); }
+  button.chip:disabled { opacity: 0.45; cursor: default; }
+  .progress { height: 6px; border-radius: 3px; background: var(--bms-surface); border: 1px solid var(--bms-border); overflow: hidden; }
+  .progress > div { height: 100%; background: currentColor; transition: width 0.5s; }
+  .stack { display: flex; flex-direction: column; gap: 8px; }
+  .spacer { flex: 1; }
 `;

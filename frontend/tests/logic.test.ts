@@ -4,24 +4,29 @@ import cs from "../src/translations/cs.json";
 import en from "../src/translations/en.json";
 import { createTranslator, formatSigned, resolveLanguage } from "../src/i18n";
 import {
-  alerts, corrections, describeLogEntry, describeRule, interpolate, regulationState, remainingMinutes,
-  suggestPoint, validatePoints, validateRule,
+  alerts, boostProgress, breakdown, corrections, curveSlope, daysInMonth, describeLogEntry, describeRule, extendBoost,
+  groupLogByDay, interpolate, isWrite, parseMmdd, regulationState, remainingMinutes, shiftCurve, slopeCurve,
+  suggestPoint, toMmdd, validatePoints, validateRule, yearSegments,
 } from "../src/logic";
-import type { Snapshot } from "../src/types";
+import { sectionSummary } from "../src/summary";
+import type { CalcResult, Snapshot } from "../src/types";
 
 const t = createTranslator("cs");
 
+const RESULT: CalcResult = {
+  curve_temp: 45, corr_wind: 1.2, corr_rain: 0, corr_humidity: 0, corr_clouds: 0, corr_sun: -0.5,
+  night_offset: 0, night_active: false, boost: 0, total_correction: 0.7, raw: 45.7, t_min: 25, t_max: 42,
+  frost_active: false, bypass_active: false, safe_mode: false, result: 42, clamped: true,
+};
+
 function snap(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
-    entry_id: "e", available: true, last_error: null, problems: {}, settings: { hlavni_vypinac: true },
+    entry_id: "e", inputs: {}, thermostat: null, profile_modified: false, active_rule: null, next_events: [],
+    available: true, last_error: null, problems: {}, settings: { hlavni_vypinac: true, limit_min: 25, limit_max: 42 },
     setting_meta: {}, entities: {}, curve: [{ x: -20, y: 70 }, { x: 20, y: 20 }], storage_ok: true,
     profiles: ["Výchozí"], system_profiles: [], active_profile: "Výchozí", starred: [], schedules: [],
     boost: { active: false, effective: 0 }, temp_source: "sensor", safe_since: null,
-    result: {
-      curve_temp: 45, corr_wind: 1.2, corr_rain: 0, corr_humidity: 0, corr_clouds: 0, corr_sun: -0.5,
-      night_offset: 0, night_active: false, boost: 0, total_correction: 0.7, raw: 45.7, t_min: 25, t_max: 42,
-      frost_active: false, bypass_active: false, safe_mode: false, result: 42, clamped: true,
-    },
+    result: RESULT,
     values: {}, last_write: {}, calc_log: [], clamp_log: [], history: [], forecast: [], forecast_ok: true,
     ...overrides,
   };
@@ -54,6 +59,12 @@ describe("stav regulace", () => {
     expect(remainingMinutes(snap({ boost: { active: true, effective: 2, until: 1000 + 600 } }), 1000)).toBe(10);
     expect(remainingMinutes(snap(), 1000)).toBe(0);
   });
+  it("průběh a prodloužení boostu", () => {
+    const s = snap({ boost: { active: true, effective: -2, since: 1000, until: 8200, hours: 2 } });
+    expect(boostProgress(s, 2800)).toBe(0.25);
+    expect(extendBoost(s, 2800, 1)).toEqual({ amount: 2, hours: 2.5 });
+    expect(extendBoost(snap(), 0, 1)).toBeNull();
+  });
   it("upozornění", () => {
     const now = 10_000;
     const list = alerts(snap({
@@ -63,12 +74,22 @@ describe("stav regulace", () => {
     expect(list.map((a) => a.level)).toEqual(["warning", "error", "warning"]);
     expect(list[0].text).toContain("20 min");
   });
+  it("rozpad výpočtu", () => {
+    expect(breakdown(RESULT).map((s) => [s.kind, s.value])).toEqual([
+      ["curve", 45], ["correction", 0.7], ["raw", 45.7], ["limit_max", 42], ["result", 42],
+    ]);
+    expect(breakdown({ ...RESULT, safe_mode: true, raw: 40, clamped: false, result: 40 }).map((s) => s.kind))
+      .toEqual(["safe", "result"]);
+    expect(breakdown(null)).toEqual([]);
+  });
 });
 
 describe("texty", () => {
   it("popis pravidla", () => {
-    expect(describeRule({ id: "1", enabled: true, type: "temp", profile: "Zima", date_from: "", date_to: "",
-      temp_op: "<", temp_val: 5, temp_days: 3 }, t, "cs")).toBe("průměr pod 5,0 °C za 3 d → Zima");
+    const base = { id: "1", enabled: true, profile: "Zima", date_from: "11-01", date_to: "03-31",
+      temp_op: "<" as const, temp_val: 5, temp_days: 3 };
+    expect(describeRule({ ...base, type: "temp" }, t, "cs")).toBe("průměr pod 5,0 °C za 3 d → Zima");
+    expect(describeRule({ ...base, type: "date" }, t, "cs")).toBe("1. 11. – 31. 3. → Zima");
   });
   it("záznam logu — událost i výpočet", () => {
     expect(describeLogEntry({ time: "1.1 10:00", event: "boost_start", amount: 3, hours: 2 }, t, "cs").title)
@@ -78,6 +99,23 @@ describe("texty", () => {
     expect(line.tone).toBe("clamped");
     expect(line.tags).toEqual(["ručně", "oříznuto", "nastaveno"]);
     expect(line.detail).toBe("křivka 45,0 °C vítr +1,20 = 46,2 °C → 42,0 °C");
+  });
+  it("filtr a seskupení logu", () => {
+    const day1 = Date.UTC(2026, 0, 5, 10) / 1000;
+    const entries = [
+      { time: "05.01 11:00", ts: day1 + 3600, thermostat: "unchanged" },
+      { time: "05.01 10:00", ts: day1, event: "boost_start" },
+      { time: "04.01 10:00", ts: day1 - 86_400, thermostat: "ok" },
+    ];
+    expect(entries.filter(isWrite).length).toBe(2);
+    expect(groupLogByDay(entries, "cs").map((g) => g.entries.length)).toEqual([2, 1]);
+  });
+  it("souhrny sekcí", () => {
+    expect(sectionSummary("profiles", snap({ profile_modified: true }), t, "cs", 0)).toBe("Profil Výchozí (upraveno)");
+    expect(sectionSummary("automations", snap(), t, "cs", 0)).toBe("nic neběží");
+    expect(sectionSummary("actions", snap({ boost: { active: true, effective: 2, until: 600 } }), t, "cs", 0))
+      .toBe("Boost +2,0 °C · 10 min");
+    expect(sectionSummary("settings", snap(), t, "cs", 0)).toBe("limity 25–42 °C");
   });
 });
 
@@ -96,10 +134,24 @@ describe("křivka a pravidla", () => {
   it("nový bod do největší mezery", () => {
     expect(suggestPoint([{ x: -20, y: 70 }, { x: 0, y: 45 }, { x: 40, y: 5 }])).toEqual({ x: 20, y: 25 });
   });
+  it("posun a sklon", () => {
+    expect(shiftCurve(pts, 0.5)).toEqual([{ x: -20, y: 70.5 }, { x: 0, y: 45.5 }, { x: 20, y: 20.5 }]);
+    expect(slopeCurve(pts, 1.1)).toEqual([{ x: -20, y: 75 }, { x: 0, y: 47.5 }, { x: 20, y: 20 }]);
+    expect(curveSlope(pts)).toBe(1.25);
+  });
   it("validace pravidla", () => {
     const rule = { profile: "Zima", type: "date" as const, date_from: "11-01", date_to: "03-31" };
     expect(validateRule(rule)).toBeNull();
     expect(validateRule({ ...rule, date_to: "3-31" })).toBe("schedule.error.date");
     expect(validateRule({ profile: "Zima", type: "temp", temp_val: 5, temp_days: 0 })).toBe("schedule.error.temp");
+  });
+  it("data plánů", () => {
+    expect(parseMmdd("02-29")).toEqual({ month: 2, day: 29 });
+    expect(toMmdd(4, 31)).toBe("04-30");
+    expect(daysInMonth(2)).toBe(29);
+    expect(yearSegments("11-01", "03-31")).toHaveLength(2);
+    const [[a, b]] = yearSegments("01-01", "12-31");
+    expect(a).toBe(0);
+    expect(b).toBeCloseTo(1);
   });
 });

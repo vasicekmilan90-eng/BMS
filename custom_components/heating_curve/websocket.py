@@ -21,6 +21,22 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_set_setting)
     websocket_api.async_register_command(hass, ws_export)
     websocket_api.async_register_command(hass, ws_import)
+    websocket_api.async_register_command(hass, ws_simulate)
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/simulate",
+    vol.Required("outdoor"): vol.Coerce(float),
+    vol.Optional("curve"): [{vol.Required("x"): vol.Coerce(float), vol.Required("y"): vol.Coerce(float)}],
+    vol.Optional("entry_id"): str,
+})
+@callback
+def ws_simulate(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    regulator = _find_regulator(hass, msg.get("entry_id"))
+    if regulator is None:
+        connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND, "BMS regulátor není načten")
+        return
+    connection.send_result(msg["id"], regulator.simulate(msg["outdoor"], msg.get("curve")))
 
 
 def _find_regulator(hass: HomeAssistant, entry_id: str | None) -> Any:

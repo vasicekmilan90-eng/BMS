@@ -117,6 +117,7 @@ class BMSRegulator:
         self.problems: dict[str, str] = {}
         self.safe_since: float | None = None
         self._forecast_ts = 0.0
+        self._next_tick: datetime | None = None
         self._last_write_outdoor: float | None = None
         self._listeners: list[CALLBACK_TYPE] = []
         self._unsubs: list[CALLBACK_TYPE] = []
@@ -165,6 +166,10 @@ class BMSRegulator:
         tracked = [e for e in (self.entry.data.get(CONF_OUTDOOR_SENSOR), self.entry.data.get(CONF_WEATHER)) if e]
         if tracked:
             self._unsubs.append(async_track_state_change_event(self.hass, tracked, self._on_input_changed))
+        if thermostat := self.entry.data.get(CONF_THERMOSTAT):
+            self._unsubs.append(async_track_state_change_event(
+                self.hass, [thermostat], self._on_thermostat_changed
+            ))
         self._schedule_interval()
         self._restore_boost()
         if not self.data["history"]:
@@ -238,13 +243,19 @@ class BMSRegulator:
         if self._unsub_interval:
             self._unsub_interval()
         minutes = max(1, int(self.settings["prepocet_interval"]))
+        self._next_tick = dt_util.utcnow() + timedelta(minutes=minutes)
         self._unsub_interval = async_track_time_interval(
             self.hass, self._async_interval_tick, timedelta(minutes=minutes), name="BMS přepočet"
         )
 
     async def _async_interval_tick(self, _now: datetime) -> None:
+        self._next_tick = dt_util.utcnow() + timedelta(minutes=max(1, int(self.settings["prepocet_interval"])))
         write = self.settings["prepocet_rezim"] in (MODE_TIME, MODE_BOTH)
         await self.async_recompute(write=write, reason="interval")
+
+    @callback
+    def _on_thermostat_changed(self, _event: Event[EventStateChangedData]) -> None:
+        self.async_notify()
 
     @callback
     def _on_input_changed(self, event: Event[EventStateChangedData]) -> None:
@@ -365,6 +376,7 @@ class BMSRegulator:
             try:
                 await self.async_refresh_weather()
                 inputs, extra = self._gather_inputs()
+                self.temp_source = extra["source"]
                 result = calc.compute(inputs)
             except Exception as err:  # noqa: BLE001 — regulátor musí běžet dál
                 _LOGGER.exception("BMS: Chyba výpočtu (%s)", reason)
@@ -403,7 +415,6 @@ class BMSRegulator:
         now = dt_util.utcnow()
         now_ts = now.timestamp()
         raw_outdoor, source = self._read_outdoor()
-        self.temp_source = source
         actual = self._read_weather_now(now_ts)
 
         def forecast_value(hours: float, key: str) -> float | None:
@@ -442,6 +453,7 @@ class BMSRegulator:
             settings=s,
         )
         extra = {
+            "source": source,
             "actual": actual,
             "forecast": forecasts,
             "forecast_temp": forecast_temp,
@@ -546,8 +558,10 @@ class BMSRegulator:
             self.data["clamp_log"] = [clamp, *self.data["clamp_log"]][:CLAMP_LOG_SIZE]
 
     def _log_event(self, kind: str, amount: float, hours: float, *, manual: bool) -> None:
+        now = dt_util.now()
         entry = {
-            "time": dt_util.now().strftime("%d.%m %H:%M"),
+            "time": now.strftime("%d.%m %H:%M"),
+            "ts": int(now.timestamp()),
             "event": kind,
             "amount": amount,
             "hours": hours,
@@ -598,8 +612,12 @@ class BMSRegulator:
         amount = abs(float(amount if amount is not None else s["reduction_amount" if reduction else "boost_amount"]))
         hours = float(hours if hours is not None else s["reduction_hours" if reduction else "boost_hours"])
         signed = -amount if reduction else amount
-        until = dt_util.utcnow() + timedelta(hours=hours)
-        self.data["boost"] = {"active": True, "amount": signed, "until": until.timestamp()}
+        now = dt_util.utcnow()
+        until = now + timedelta(hours=hours)
+        self.data["boost"] = {
+            "active": True, "amount": signed, "until": until.timestamp(),
+            "since": now.timestamp(), "hours": hours,
+        }
         self._log_event("reduction_start" if reduction else "boost_start", signed, hours, manual=True)
         self._schedule_boost_expiry(until)
         await self.store.async_save()
@@ -940,6 +958,77 @@ class BMSRegulator:
             self.async_notify()
 
     # ── Pohledy pro entity a kartu ────────────────────────────────────────────
+    def simulate(self, outdoor: float, curve: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        """Výsledek pro zadanou venkovní teplotu (a případně jinou křivku) bez zápisu termostatu."""
+        inputs, _ = self._gather_inputs()
+        inputs.outdoor = inputs.raw_outdoor = float(outdoor)
+        inputs.safe_mode = False
+        if curve and len(curve) >= 2:
+            inputs.curve = [(float(p["x"]), float(p["y"])) for p in curve]
+        return calc.compute(inputs).as_dict()
+
+    def _thermostat_info(self) -> dict[str, Any] | None:
+        entity_id = self.entry.data.get(CONF_THERMOSTAT)
+        state = self.hass.states.get(entity_id) if entity_id else None
+        if state is None:
+            return None
+        return {
+            "entity_id": entity_id,
+            "state": state.state,
+            "target": _to_float(state.attributes.get("temperature")),
+            "current": _to_float(state.attributes.get("current_temperature")),
+        }
+
+    def _profile_modified(self) -> bool:
+        """Liší se aktuální nastavení nebo křivka od aktivního profilu?"""
+        profile = self.data["profiles"].get(self.data["active_profile"])
+        if profile is None:
+            return False
+        for key, value in profile.get("settings", {}).items():
+            if key in self.settings and self.settings[key] != value:
+                return True
+        curve = profile.get("curve") or []
+        if len(curve) >= 2:
+            current = [(float(p["x"]), float(p["y"])) for p in self.data["curve"]]
+            saved = [(float(p["x"]), float(p["y"])) for p in curve]
+            return sorted(current) != sorted(saved)
+        return False
+
+    def _next_events(self) -> list[dict[str, Any]]:
+        """Nejbližší plánované události (přepočet, konec boostu, den/noc, plán)."""
+        s = self.settings
+        now = dt_util.now()
+        events: list[dict[str, Any]] = []
+        if self._next_tick:
+            events.append({"kind": "recalc", "ts": int(self._next_tick.timestamp())})
+        if self.boost_amount:
+            events.append({"kind": "boost_end", "ts": int(self.data["boost"]["until"])})
+        if s["night_mode"]:
+            candidates = []
+            for hour, kind in ((int(s["day_start"]), "day_start"), (int(s["day_end"]), "night_start")):
+                moment = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+                if moment <= now:
+                    moment += timedelta(days=1)
+                candidates.append((moment, kind))
+            moment, kind = min(candidates)
+            events.append({"kind": kind, "ts": int(moment.timestamp())})
+        upcoming = []
+        for rule in self.data["schedules"]:
+            if not rule.get("enabled", True) or rule.get("type") != "date" or not rule.get("date_from"):
+                continue
+            try:
+                month, day = (int(v) for v in rule["date_from"].split("-"))
+                start = now.replace(month=month, day=day, hour=0, minute=0, second=0, microsecond=0)
+                if start <= now:
+                    start = start.replace(year=start.year + 1)
+            except ValueError:
+                continue
+            upcoming.append((start, rule["profile"]))
+        if upcoming:
+            start, profile = min(upcoming)
+            events.append({"kind": "schedule", "ts": int(start.timestamp()), "profile": profile})
+        return sorted(events, key=lambda e: e["ts"])
+
     def chart_forecast(self, from_h: float, to_h: float) -> list[dict[str, Any]]:
         now_ts = dt_util.utcnow().timestamp()
         return [
@@ -954,8 +1043,18 @@ class BMSRegulator:
 
     def snapshot(self) -> dict[str, Any]:
         """Kompletní stav pro kartu (websocket)."""
+        rule = self._matching_rule()
         return {
             "entry_id": self.entry.entry_id,
+            "inputs": {
+                "thermostat": self.entry.data.get(CONF_THERMOSTAT),
+                "outdoor_sensor": self.entry.data.get(CONF_OUTDOOR_SENSOR),
+                "weather": self.entry.data.get(CONF_WEATHER),
+            },
+            "thermostat": self._thermostat_info(),
+            "profile_modified": self._profile_modified(),
+            "active_rule": rule["id"] if rule else None,
+            "next_events": self._next_events(),
             "available": self.available,
             "last_error": self.last_error,
             "problems": self.problems,

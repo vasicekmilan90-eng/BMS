@@ -13,10 +13,11 @@ export interface HassConnection {
 
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
+  entities?: Record<string, { entity_id: string; platform?: string }>;
   connection: HassConnection;
   language: string;
   locale?: { language: string };
-  user?: { is_admin: boolean };
+  user?: { id?: string; is_admin: boolean };
   themes?: { darkMode?: boolean };
   callService(domain: string, service: string, data?: Record<string, unknown>): Promise<unknown>;
 }
@@ -115,8 +116,26 @@ export interface ThermostatWrite {
 
 export type SettingValue = number | boolean | string;
 
+export interface NextEvent {
+  kind: "recalc" | "boost_end" | "day_start" | "night_start" | "schedule";
+  ts: number;
+  profile?: string;
+}
+
+export interface ThermostatInfo {
+  entity_id: string;
+  state: string;
+  target: number | null;
+  current: number | null;
+}
+
 export interface Snapshot {
   entry_id: string;
+  inputs: { thermostat?: string; outdoor_sensor?: string; weather?: string };
+  thermostat: ThermostatInfo | null;
+  profile_modified: boolean;
+  active_rule: string | null;
+  next_events: NextEvent[];
   available: boolean;
   last_error: string | null;
   problems: Record<string, string>;
@@ -130,7 +149,7 @@ export interface Snapshot {
   active_profile: string;
   starred: string[];
   schedules: ScheduleRule[];
-  boost: { active: boolean; amount?: number; until?: number; effective: number };
+  boost: { active: boolean; amount?: number; until?: number; since?: number; hours?: number; effective: number };
   temp_source: "sensor" | "weather" | "safe_fallback";
   safe_since: number | null;
   result: CalcResult | null;

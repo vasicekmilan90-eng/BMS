@@ -1,15 +1,16 @@
-import { html, nothing, css } from "lit";
+import { html, nothing, css, svg } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
 
 import { BmsSection } from "../components.js";
-import { describeRule, validateRule } from "../logic.js";
+import { daysInMonth, describeRule, parseMmdd, toMmdd, validateRule, yearSegments } from "../logic.js";
 import { baseStyles } from "../styles.js";
 import type { ScheduleRule } from "../types.js";
 
 const EMPTY_RULE: ScheduleRule = {
-  id: "", enabled: true, type: "date", profile: "", date_from: "", date_to: "",
+  id: "", enabled: true, type: "date", profile: "", date_from: "11-01", date_to: "03-31",
   temp_op: "<", temp_val: 5, temp_days: 3,
 };
+const PALETTE = ["var(--bms-info)", "var(--bms-heat)", "var(--bms-ok)", "var(--bms-night)", "var(--bms-frost)", "var(--bms-warn)"];
 
 @customElement("bms-sec-schedules")
 export class BmsSchedulesSection extends BmsSection {
@@ -18,15 +19,14 @@ export class BmsSchedulesSection extends BmsSection {
     li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--bms-border); border-radius: 8px; }
     li .desc { flex: 1; font-size: var(--ha-font-size-s, 13px); }
     li.disabled .desc { opacity: 0.55; }
-    li.current { border-color: var(--primary-color); }
+    li.current { border-color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 6%, transparent); }
+    li .swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
     .order { display: flex; flex-direction: column; }
-    ha-icon-button { --mdc-icon-button-size: 32px; --mdc-icon-size: 18px; }
-    .icon-btn { border: none; background: none; cursor: pointer; color: var(--bms-muted); padding: 2px; border-radius: 4px; }
-    .icon-btn:hover:not(:disabled) { color: var(--primary-text-color); background: var(--bms-surface); }
-    .icon-btn:disabled { opacity: 0.3; cursor: default; }
-    .icon-btn ha-icon { --mdc-icon-size: 18px; }
+    .order .icon-btn { padding: 0; }
     .two { display: flex; gap: 8px; align-items: center; }
     .two input, .two select { flex: 1; min-width: 0; }
+    .timeline { width: 100%; display: block; margin-bottom: 10px; }
+    .months { display: flex; justify-content: space-between; font-size: 10px; color: var(--bms-muted); margin: -6px 0 10px; }
   `];
 
   @state() private draft?: ScheduleRule;
@@ -63,6 +63,28 @@ export class BmsSchedulesSection extends BmsSection {
     this.run(() => this.ctx.store.callService("reorder_schedules", { order }));
   }
 
+  private monthNames(): string[] {
+    const fmt = new Intl.DateTimeFormat(this.ctx.lang, { month: "short" });
+    return Array.from({ length: 12 }, (_, i) => fmt.format(new Date(Date.UTC(2024, i, 15))));
+  }
+
+  private datePicker(field: "date_from" | "date_to", label: string) {
+    const value = parseMmdd(this.draft?.[field] ?? "");
+    const months = this.monthNames();
+    return html`<div class="two" role="group" aria-label=${label}>
+      <span class="small" style="min-width:28px">${label}</span>
+      <select aria-label=${this.t("schedule.day")} .value=${String(value.day)}
+        @change=${(e: Event) => this.patch({ [field]: toMmdd(value.month, Number((e.target as HTMLSelectElement).value)) })}>
+        ${Array.from({ length: daysInMonth(value.month) }, (_, i) => i + 1).map((d) =>
+          html`<option value=${d} ?selected=${d === value.day}>${d}.</option>`)}
+      </select>
+      <select aria-label=${this.t("schedule.month")} .value=${String(value.month)}
+        @change=${(e: Event) => this.patch({ [field]: toMmdd(Number((e.target as HTMLSelectElement).value), value.day) })}>
+        ${months.map((m, i) => html`<option value=${i + 1} ?selected=${i + 1 === value.month}>${m}</option>`)}
+      </select>
+    </div>`;
+  }
+
   private renderDialog() {
     const t = this.t;
     const r = this.draft;
@@ -80,13 +102,8 @@ export class BmsSchedulesSection extends BmsSection {
         ${r.type === "date" ? html`
           <div class="field">
             <label>${t("schedule.date_range")}</label>
-            <div class="two">
-              <input aria-label=${t("schedule.date_from")} placeholder="11-01" pattern="\\d{2}-\\d{2}" .value=${r.date_from}
-                @input=${(e: Event) => this.patch({ date_from: (e.target as HTMLInputElement).value.trim() })} />
-              <span>–</span>
-              <input aria-label=${t("schedule.date_to")} placeholder="03-31" pattern="\\d{2}-\\d{2}" .value=${r.date_to}
-                @input=${(e: Event) => this.patch({ date_to: (e.target as HTMLInputElement).value.trim() })} />
-            </div>
+            ${this.datePicker("date_from", t("schedule.date_from"))}
+            ${this.datePicker("date_to", t("schedule.date_to"))}
             <span class="small muted">${t("schedule.date_hint")}</span>
           </div>` : html`
           <div class="field">
@@ -115,30 +132,57 @@ export class BmsSchedulesSection extends BmsSection {
         </div>
         ${this.error ? html`<div class="alert error" role="alert">${this.error}</div>` : nothing}
         <div class="actions">
-          <button type="button" class="btn" @click=${() => this.dialog.close()}>${this.t("common.cancel")}</button>
-          <button type="submit" class="btn primary">${this.t("common.save")}</button>
+          <button type="button" class="btn" @click=${() => this.dialog.close()}>${t("common.cancel")}</button>
+          <button type="submit" class="btn primary">${t("common.save")}</button>
         </div>
       </form>`;
+  }
+
+  /** Roční osa s obdobími pravidel a dnešním dnem. */
+  private renderTimeline(rules: ScheduleRule[]) {
+    const dated = rules.map((r, i) => ({ r, color: PALETTE[i % PALETTE.length] })).filter((x) => x.r.type === "date");
+    if (!dated.length) return nothing;
+    const now = new Date();
+    const today = (Date.UTC(2024, now.getMonth(), now.getDate()) - Date.UTC(2024, 0, 1)) / (366 * 86_400_000);
+    const rowH = 8;
+    const height = dated.length * (rowH + 3) + 4;
+    return html`
+      <svg class="timeline" viewBox="0 0 360 ${height}" preserveAspectRatio="none" style="height:${height}px"
+        role="img" aria-label=${this.t("schedule.timeline")}>
+        ${Array.from({ length: 11 }, (_, i) => svg`<line x1=${((i + 1) / 12) * 360} x2=${((i + 1) / 12) * 360} y1="0" y2=${height}
+          stroke="var(--bms-border)" vector-effect="non-scaling-stroke"></line>`)}
+        ${dated.map(({ r, color }, row) => yearSegments(r.date_from, r.date_to).map(([a, b]) => svg`
+          <rect x=${a * 360} y=${2 + row * (rowH + 3)} width=${Math.max(1, (b - a) * 360)} height=${rowH} rx="2"
+            fill=${color} opacity=${r.enabled ? (r.id === this.snap.active_rule ? 1 : 0.55) : 0.15}></rect>`))}
+        <line x1=${today * 360} x2=${today * 360} y1="0" y2=${height} stroke="var(--primary-text-color)" stroke-width="2"
+          vector-effect="non-scaling-stroke"></line>
+      </svg>
+      <div class="months">${this.monthNames().map((m) => html`<span>${m}</span>`)}</div>`;
   }
 
   protected render() {
     const { snap, editable, lang } = this.ctx;
     const t = this.t;
     const rules = snap.schedules;
+    const colors = rules.map((r, i) => (r.type === "date" ? PALETTE[i % PALETTE.length] : "transparent"));
     return html`
+      ${this.renderTimeline(rules)}
       ${rules.length ? html`<ul>
         ${rules.map((rule, i) => html`
-          <li class=${rule.enabled ? "" : "disabled"}>
+          <li class="${rule.enabled ? "" : "disabled"} ${rule.id === snap.active_rule ? "current" : ""}"
+            aria-current=${rule.id === snap.active_rule ? "true" : nothing}>
             ${editable ? html`<div class="order">
               <button class="icon-btn" ?disabled=${i === 0} aria-label=${t("schedule.up")} @click=${() => this.move(i, -1)}>
                 <ha-icon icon="mdi:chevron-up"></ha-icon></button>
               <button class="icon-btn" ?disabled=${i === rules.length - 1} aria-label=${t("schedule.down")} @click=${() => this.move(i, 1)}>
                 <ha-icon icon="mdi:chevron-down"></ha-icon></button>
             </div>` : nothing}
+            <span class="swatch" style="background:${colors[i]}"></span>
             <ha-switch .checked=${rule.enabled} ?disabled=${!editable} aria-label=${t("schedule.enabled")}
               @change=${(e: Event) => this.run(() => this.ctx.store.callService("save_schedule",
                 { ...rule, enabled: (e.target as HTMLInputElement).checked }))}></ha-switch>
-            <span class="desc">${describeRule(rule, t, lang)}</span>
+            <span class="desc">${describeRule(rule, t, lang)}
+              ${rule.id === snap.active_rule ? html`<span class="chip ok">${t("schedule.current")}</span>` : nothing}</span>
             ${editable ? html`
               <button class="icon-btn" aria-label=${t("schedule.edit")} @click=${() => this.edit(rule)}><ha-icon icon="mdi:pencil"></ha-icon></button>
               <button class="icon-btn" aria-label=${t("schedule.delete")}

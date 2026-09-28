@@ -1,7 +1,7 @@
 /** Odvozené stavy a texty pro zobrazení (čisté funkce, testované). */
 
 import { formatNumber, formatSigned, type Translator } from "./i18n.js";
-import type { CalcLogEntry, CurvePoint, ScheduleRule, Snapshot } from "./types.js";
+import type { CalcLogEntry, CalcResult, CurvePoint, ScheduleRule, Snapshot } from "./types.js";
 
 export type RegulationState = "inactive" | "boost" | "reduction" | "frost" | "night" | "bypass" | "safe" | "active";
 
@@ -71,7 +71,13 @@ export function alerts(snap: Snapshot, t: Translator, nowSec: number): Alert[] {
 
 export function describeRule(rule: ScheduleRule, t: Translator, language: string): string {
   if (rule.type === "date") {
-    return t("schedule.desc_date", { from: rule.date_from || "?", to: rule.date_to || "?", profile: rule.profile });
+    const fmt = new Intl.DateTimeFormat(language, { day: "numeric", month: "numeric", timeZone: "UTC" });
+    const date = (v: string) => {
+      if (!MMDD.test(v)) return v || "?";
+      const { month, day } = parseMmdd(v);
+      return fmt.format(new Date(Date.UTC(2024, month - 1, day)));
+    };
+    return t("schedule.desc_date", { from: date(rule.date_from), to: date(rule.date_to), profile: rule.profile });
   }
   return t(rule.temp_op === "<" ? "schedule.desc_temp_below" : "schedule.desc_temp_above", {
     value: formatNumber(rule.temp_val, language, 1),
@@ -184,4 +190,130 @@ export function validateRule(rule: Partial<ScheduleRule>): string | null {
     return "schedule.error.temp";
   }
   return null;
+}
+
+export function parseMmdd(value: string): { month: number; day: number } {
+  const m = MMDD.exec(value);
+  return m ? { month: Number(m[1]), day: Number(m[2]) } : { month: 1, day: 1 };
+}
+
+export function toMmdd(month: number, day: number): string {
+  const d = Math.min(day, daysInMonth(month));
+  return `${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Počet dní v měsíci (únor 29 — pravidla platí každý rok). */
+export function daysInMonth(month: number): number {
+  return new Date(Date.UTC(2024, month, 0)).getUTCDate();
+}
+
+function yearFraction(mmdd: string): number {
+  const { month, day } = parseMmdd(mmdd);
+  return (Date.UTC(2024, month - 1, day) - Date.UTC(2024, 0, 1)) / (366 * 86_400_000);
+}
+
+/** Úseky roku (0–1) pokryté obdobím od–do včetně přelomu roku. */
+export function yearSegments(from: string, to: string): [number, number][] {
+  const a = yearFraction(from);
+  const b = yearFraction(to) + 1 / 366;
+  return a <= b ? [[a, Math.min(1, b)]] : [[a, 1], [0, b]];
+}
+
+// ── Rozpad výpočtu ────────────────────────────────────────────────────────────────────
+export interface BreakdownStep {
+  kind: "curve" | "safe" | "correction" | "raw" | "limit_max" | "limit_min" | "result";
+  value: number;
+}
+
+/** Křivka → korekce → (surová → limit) → výsledek. */
+export function breakdown(r: CalcResult | null): BreakdownStep[] {
+  if (!r) return [];
+  const steps: BreakdownStep[] = [];
+  if (r.safe_mode) {
+    steps.push({ kind: "safe", value: r.raw });
+  } else {
+    steps.push({ kind: "curve", value: r.curve_temp });
+    if (Math.abs(r.total_correction) >= 0.05) steps.push({ kind: "correction", value: r.total_correction });
+  }
+  if (r.clamped) {
+    steps.push({ kind: "raw", value: r.raw });
+    steps.push(r.raw > r.result ? { kind: "limit_max", value: r.t_max } : { kind: "limit_min", value: r.t_min });
+  }
+  steps.push({ kind: "result", value: r.result });
+  return steps;
+}
+
+// ── Úpravy křivky ────────────────────────────────────────────────────────────────────────────
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+/** Posun celé křivky nahoru/dolů. */
+export function shiftCurve(points: CurvePoint[], delta: number): CurvePoint[] {
+  return points.map((p) => ({ x: p.x, y: round1(p.y + delta) }));
+}
+
+/** Změna sklonu — body se roztáhnou kolem bodu křivky na `pivot` °C venku. */
+export function slopeCurve(points: CurvePoint[], factor: number, pivot = 20): CurvePoint[] {
+  const base = interpolate(points, pivot);
+  return points.map((p) => ({ x: p.x, y: round1(base + (p.y - base) * factor) }));
+}
+
+/** Sklon křivky ve °C topení na 1 °C venku (kladné číslo = té víc, čím je zima). */
+export function curveSlope(points: CurvePoint[]): number {
+  const pts = sortPoints(points);
+  if (pts.length < 2) return 0;
+  const a = pts[0];
+  const b = pts[pts.length - 1];
+  return b.x === a.x ? 0 : (a.y - b.y) / (b.x - a.x);
+}
+
+// ── Čas ──────────────────────────────────────────────────────────────────────────────────────────
+/** „před 5 min“ / „za 2 h“. */
+export function relativeTime(ts: number, nowSec: number, language: string): string {
+  const diff = ts - nowSec;
+  const abs = Math.abs(diff);
+  const rtf = new Intl.RelativeTimeFormat(language, { numeric: "auto", style: "short" });
+  if (abs < 60) return rtf.format(0, "minute");
+  if (abs < 3600) return rtf.format(Math.round(diff / 60), "minute");
+  if (abs < 86_400) return rtf.format(Math.round(diff / 3600), "hour");
+  return rtf.format(Math.round(diff / 86_400), "day");
+}
+
+/** Podíl uplynulého času boostu/útlumu (0–1). */
+export function boostProgress(snap: Snapshot, nowSec: number): number {
+  const { since, until } = snap.boost;
+  if (!snap.boost.effective || !since || !until || until <= since) return 0;
+  return Math.min(1, Math.max(0, (nowSec - since) / (until - since)));
+}
+
+/** Parametry pro prodloužení běžícího boostu o `extra` hodin (max. 24 h od teď). */
+export function extendBoost(snap: Snapshot, nowSec: number, extra: number): { amount: number; hours: number } | null {
+  const { effective, until } = snap.boost;
+  if (!effective || !until) return null;
+  const remaining = Math.max(0, until - nowSec) / 3600;
+  const hours = Math.min(24, Math.max(0.5, Math.round((remaining + extra) * 2) / 2));
+  return { amount: Math.abs(effective), hours };
+}
+
+// ── Log ─────────────────────────────────────────────────────────────────────────────────────────────
+/** Záznamy, které něco změnily: události a skutečné zápisy termostatu. */
+export function isWrite(entry: CalcLogEntry): boolean {
+  return Boolean(entry.event) || entry.thermostat === "ok" || entry.thermostat === "error";
+}
+
+export interface LogGroup {
+  day: string;
+  entries: CalcLogEntry[];
+}
+
+/** Seskupení podle dne (záznamy bez `ts` podle textu času „dd.mm HH:MM“). */
+export function groupLogByDay(entries: CalcLogEntry[], language: string): LogGroup[] {
+  const fmt = new Intl.DateTimeFormat(language, { weekday: "short", day: "numeric", month: "numeric" });
+  const groups: LogGroup[] = [];
+  for (const entry of entries) {
+    const day = entry.ts ? fmt.format(new Date(entry.ts * 1000)) : entry.time.split(" ")[0] ?? "";
+    const last = groups.at(-1);
+    if (last && last.day === day) last.entries.push(entry);
+    else groups.push({ day, entries: [entry] });
+  }
+  return groups;
 }

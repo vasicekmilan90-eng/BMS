@@ -35,6 +35,37 @@
       "reconfigure_successful": "Nastavení bylo úspěšně změněno."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Nastavení regulace",
+        "description": "Stejné hodnoty najdete i v entitách zařízení a v kartě. Profily křivky se tím nemění.",
+        "data": {
+          "limit_min": "Limit termostatu: minimum",
+          "limit_max": "Limit termostatu: maximum",
+          "safe_temp": "Bezpečná venkovní teplota",
+          "safe_curve_temp": "Topení při výpadku venkovní teploty",
+          "prepocet_rezim": "Kdy nastavovat termostat",
+          "prepocet_interval": "Interval přepočtu",
+          "prepocet_delta": "Změna venkovní teploty pro přepočet",
+          "pouziti_predpovedi": "Křivka a slunce z předpovědi",
+          "predpoved_hodin": "Výhled předpovědi teploty"
+        }
+      }
+    },
+    "abort": {
+      "not_loaded": "Integrace není načtena, nastavení nelze změnit."
+    }
+  },
+  "selector": {
+    "prepocet_rezim": {
+      "options": {
+        "cas": "Podle intervalu",
+        "teplota": "Při změně venkovní teploty",
+        "oboji": "Interval i změna teploty"
+      }
+    }
+  },
   "exceptions": {
     "not_loaded": {
       "message": "Integrace BMS regulátoru není načtena."
