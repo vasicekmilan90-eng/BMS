@@ -20,6 +20,17 @@ delete_profile:
       selector:
         text:
 
+rename_profile:
+  fields:
+    name:
+      required: true
+      selector:
+        text:
+    new_name:
+      required: true
+      selector:
+        text:
+
 set_curve_points:
   fields:
     points:

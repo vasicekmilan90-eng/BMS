@@ -60,8 +60,12 @@ from .const import (
     TEMP_SOURCE_WEATHER,
     WEATHER_DEBOUNCE,
 )
-from .settings import ALL_SETTINGS, PROFILE_KEYS, coerce_setting, default_settings
-from .storage import BMSStore
+from .settings import ALL_SETTINGS, NUMBER_SETTINGS, PROFILE_KEYS, coerce_setting, default_settings
+from .storage import BMSStore, migrate_legacy_profile
+
+SETTING_META = {
+    s.key: {"min": s.min, "max": s.max, "step": s.step, "unit": s.unit} for s in NUMBER_SETTINGS
+}
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -226,6 +230,7 @@ class BMSRegulator:
             self._schedule_interval()
         if recompute:
             self._display_debouncer.async_schedule_call()
+        self.async_notify()
 
     # ── Plánování přepočtu ────────────────────────────────────────────────────
     @callback
@@ -702,6 +707,26 @@ class BMSRegulator:
         self._display_debouncer.async_schedule_call()
         self.async_notify()
 
+    async def async_rename_profile(self, name: str, new_name: str) -> None:
+        profiles = self.data["profiles"]
+        if name not in profiles:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="profile_not_found",
+                translation_placeholders={"name": name},
+            )
+        if new_name == name:
+            return
+        profiles[new_name] = profiles.pop(name)
+        if self.data["active_profile"] == name:
+            self.data["active_profile"] = new_name
+        self.data["starred"] = [new_name if s == name else s for s in self.data["starred"]]
+        for rule in self.data["schedules"]:
+            if rule.get("profile") == name:
+                rule["profile"] = new_name
+        await self.store.async_save()
+        self.hass.bus.async_fire(EVENT_PROFILES_CHANGED)
+        self.async_notify()
+
     async def async_delete_profile(self, name: str) -> None:
         if name not in self.data["profiles"]:
             return
@@ -721,6 +746,54 @@ class BMSRegulator:
         await self.store.async_save()
         self.hass.bus.async_fire(EVENT_PROFILES_CHANGED)
         self.async_notify()
+
+    def export_data(self) -> dict[str, Any]:
+        return {
+            "format": "bms-profiles",
+            "version": 1,
+            "exported": dt_util.now().isoformat(),
+            "profiles": copy.deepcopy(self.data["profiles"]),
+            "schedules": copy.deepcopy(self.data["schedules"]),
+            "starred": list(self.data["starred"]),
+        }
+
+    async def async_import_data(self, payload: dict[str, Any]) -> list[str]:
+        """Sloučí importované profily (stejný název = přepsání); vrátí názvy importovaných profilů."""
+        profiles = payload.get("profiles")
+        if not isinstance(profiles, dict):
+            raise ValueError("Soubor neobsahuje profily")
+        imported: list[str] = []
+        for name, raw in profiles.items():
+            if not isinstance(name, str) or not name.strip() or name == DEFAULT_PROFILE or not isinstance(raw, dict):
+                continue
+            if "settings" not in raw:
+                raw = migrate_legacy_profile(raw)
+            settings: dict[str, Any] = {}
+            for key, value in (raw.get("settings") or {}).items():
+                if key in PROFILE_KEYS:
+                    try:
+                        settings[key] = coerce_setting(key, value)
+                    except (TypeError, ValueError):
+                        continue
+            curve = [
+                {"x": float(p["x"]), "y": float(p["y"])}
+                for p in raw.get("curve") or [] if isinstance(p, dict) and "x" in p and "y" in p
+            ]
+            self.data["profiles"][name.strip()] = {"settings": settings, "curve": sorted(curve, key=lambda p: p["x"])}
+            imported.append(name.strip())
+        if isinstance(payload.get("schedules"), list):
+            known = {r["id"] for r in self.data["schedules"]}
+            self.data["schedules"].extend(
+                r for r in payload["schedules"] if isinstance(r, dict) and r.get("id") and r["id"] not in known
+            )
+        if isinstance(payload.get("starred"), list):
+            valid = set(self.data["profiles"]) | {DEFAULT_PROFILE}
+            merged = [*self.data["starred"], *(n for n in payload["starred"] if n not in self.data["starred"])]
+            self.data["starred"] = [n for n in merged if n in valid][:15]
+        await self.store.async_save()
+        self.hass.bus.async_fire(EVENT_PROFILES_CHANGED)
+        self.async_notify()
+        return imported
 
     # ── Plány ─────────────────────────────────────────────────────────────────
     async def async_save_schedule(self, rule_data: dict[str, Any]) -> None:
@@ -887,6 +960,7 @@ class BMSRegulator:
             "last_error": self.last_error,
             "problems": self.problems,
             "settings": dict(self.settings),
+            "setting_meta": SETTING_META,
             "entities": {name: entity.entity_id for name, entity in self.entities.items() if entity.entity_id},
             "curve": self.data["curve"],
             "storage_ok": self.store.ok,

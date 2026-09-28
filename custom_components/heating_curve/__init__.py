@@ -23,6 +23,7 @@ from . import websocket
 from .const import (
     CARD_FILENAME,
     CONF_SUN,
+    DEFAULT_PROFILE,
     DOMAIN,
     EVENT_CURVE_RESPONSE,
     EVENT_FORCE_REFRESH_DONE,
@@ -50,6 +51,10 @@ SERVICE_SCHEMAS: dict[str, vol.Schema] = {
     "save_profile":       _NAME_SCHEMA,
     "load_profile":       _NAME_SCHEMA,
     "delete_profile":     _NAME_SCHEMA,
+    "rename_profile":     vol.Schema({
+        vol.Required("name"): cv.string,
+        vol.Required("new_name"): vol.All(cv.string, vol.Strip, vol.Length(min=1), vol.NotIn([DEFAULT_PROFILE])),
+    }),
     "activate_boost":     _AMOUNT_HOURS_SCHEMA,
     "activate_reduction": _AMOUNT_HOURS_SCHEMA,
     "cancel_boost":       _EMPTY_SCHEMA,
@@ -155,6 +160,10 @@ async def _handle_delete_profile(call: ServiceCall) -> None:
     await _regulator(call.hass).async_delete_profile(call.data["name"])
 
 
+async def _handle_rename_profile(call: ServiceCall) -> None:
+    await _regulator(call.hass).async_rename_profile(call.data["name"], call.data["new_name"])
+
+
 async def _handle_set_starred(call: ServiceCall) -> None:
     await _regulator(call.hass).async_set_starred(call.data["starred"])
 
@@ -206,6 +215,7 @@ SERVICE_HANDLERS = {
     "save_profile":       _handle_save_profile,
     "load_profile":       _handle_load_profile,
     "delete_profile":     _handle_delete_profile,
+    "rename_profile":     _handle_rename_profile,
     "activate_boost":     _handle_activate_boost,
     "activate_reduction": _handle_activate_reduction,
     "cancel_boost":       _handle_cancel_boost,

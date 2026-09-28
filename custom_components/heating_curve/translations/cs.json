@@ -198,6 +198,20 @@
         }
       }
     },
+    "rename_profile": {
+      "name": "Přejmenovat profil",
+      "description": "Přejmenuje profil a upraví odkazy v rychlých profilech a plánech.",
+      "fields": {
+        "name": {
+          "name": "Název",
+          "description": "Současný název profilu."
+        },
+        "new_name": {
+          "name": "Nový název",
+          "description": "Nový název profilu."
+        }
+      }
+    },
     "set_curve_points": {
       "name": "Nastavit body křivky",
       "description": "Uloží celé pole bodů topné křivky do úložiště.",

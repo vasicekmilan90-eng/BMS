@@ -198,6 +198,20 @@
         }
       }
     },
+    "rename_profile": {
+      "name": "Rename profile",
+      "description": "Renames a profile and updates quick profiles and schedule rules.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Current profile name."
+        },
+        "new_name": {
+          "name": "New name",
+          "description": "New profile name."
+        }
+      }
+    },
     "set_curve_points": {
       "name": "Set curve points",
       "description": "Stores the complete list of heating curve points.",

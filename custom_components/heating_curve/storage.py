@@ -47,7 +47,7 @@ def _empty_data() -> dict[str, Any]:
     }
 
 
-def _migrate_legacy_profile(raw: dict[str, Any]) -> dict[str, Any]:
+def migrate_legacy_profile(raw: dict[str, Any]) -> dict[str, Any]:
     settings: dict[str, Any] = {}
     for entity_id, value in raw.items():
         if entity_id.startswith("__"):
@@ -95,7 +95,7 @@ class BMSStore:
             data["curve"] = [{"x": float(p["x"]), "y": float(p["y"])} for p in curve_raw["points"]]
         if profiles_raw:
             data["profiles"] = {
-                name: _migrate_legacy_profile(raw)
+                name: migrate_legacy_profile(raw)
                 for name, raw in profiles_raw.items()
                 if not name.startswith("__") and isinstance(raw, dict)
             }

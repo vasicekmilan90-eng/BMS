@@ -118,7 +118,8 @@ async def test_per_influence_forecast_and_units(
 
     points = {h: {"temperature": 4, "wind_speed": 5, "precipitation": 2, "humidity": 70, "cloud_coverage": 50}
               for h in range(49)}
-    points[3] = {**points[3], "wind_speed": 20}   # 72 km/h
+    for hour in (3, 4):  # nejbližší bod k +3 h podle aktuální minuty
+        points[hour] = {**points[hour], "wind_speed": 20}   # 72 km/h
     weather.set_hourly(points)
     await _set(hass, "number", "vitr_predpoved_hodin", 3)
     await _set(hass, "switch", "vitr_predpoved", True)
@@ -165,7 +166,10 @@ async def test_profiles(hass: HomeAssistant, setup_integration: MockConfigEntry)
 
     await hass.services.async_call(DOMAIN, "set_starred", {"starred": ["Test", "Neexistuje"]}, blocking=True)
     assert reg.data["starred"] == ["Test"]
-    await hass.services.async_call(DOMAIN, "delete_profile", {"name": "Test"}, blocking=True)
+    await hass.services.async_call(DOMAIN, "rename_profile", {"name": "Test", "new_name": "Test2"}, blocking=True)
+    assert hass.states.get("select.bms_profil_krivky").state == "Test2"
+    assert reg.data["starred"] == ["Test2"]
+    await hass.services.async_call(DOMAIN, "delete_profile", {"name": "Test2"}, blocking=True)
     assert hass.states.get("select.bms_profil_krivky").state == "Výchozí"
     assert reg.data["starred"] == []
 
@@ -210,6 +214,31 @@ async def test_websocket(hass: HomeAssistant, setup_integration: MockConfigEntry
     await hass.services.async_call(DOMAIN, "force_refresh", {}, blocking=True)
     assert connection.send_message.call_count > sent
     connection.subscriptions[2]()
+
+
+async def test_websocket_settings_export_import(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
+    reg = _reg(setup_integration)
+    connection = MagicMock()
+    websocket.ws_set_setting(hass, connection, {"id": 1, "type": "heating_curve/set_setting",
+                                                "key": "night_offset", "value": -4})
+    assert connection.send_result.call_args[0][1] == {"value": -4.0}
+    assert hass.states.get("number.bms_night_offset").state == "-4.0"
+    websocket.ws_set_setting(hass, connection, {"id": 2, "type": "heating_curve/set_setting",
+                                                "key": "neexistuje", "value": 1})
+    connection.send_error.assert_called_once()
+
+    await hass.services.async_call(DOMAIN, "save_profile", {"name": "Export"}, blocking=True)
+    websocket.ws_export(hass, connection, {"id": 3, "type": "heating_curve/export"})
+    exported = connection.send_result.call_args[0][1]
+    assert exported["profiles"]["Export"]["settings"]["night_offset"] == -4.0
+
+    exported["profiles"] = {"Import": exported["profiles"]["Export"],
+                            "Stary": {"number.bms_night_offset": "-1", "__curve_points__": []}}
+    names = await reg.async_import_data(exported)
+    assert names == ["Import", "Stary"]
+    assert reg.data["profiles"]["Stary"]["settings"] == {"night_offset": -1.0}
+    with pytest.raises(ValueError):
+        await reg.async_import_data({"nic": 1})
 
 
 async def test_missing_thermostat_repair_and_diagnostics(
