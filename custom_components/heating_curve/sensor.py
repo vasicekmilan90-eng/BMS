@@ -1,21 +1,48 @@
+from __future__ import annotations
+
+import asyncio
 import logging
+import math
 from datetime import datetime, timedelta, timezone
-from homeassistant.components.sensor import SensorEntity
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, STATE_ON
-from homeassistant.core import callback
-from homeassistant.helpers.event import async_track_state_change_event
+
+from astral import sun as astral_sun
+
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.history import get_significant_states
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, STATE_ON, EntityCategory
+from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
+from homeassistant.helpers.sun import get_astral_observer
+from homeassistant.util import dt as dt_util
+
+from . import HeatingCurveConfigEntry
 from .const import (
     DOMAIN, CONF_OUTDOOR_SENSOR, CONF_WEATHER, CONF_SUN,
-    DEFAULT_CURVE_POINTS, INFLUENCE_DEFAULTS,
+    DEFAULT_CURVE_POINTS, INFLUENCE_DEFAULTS, DEFAULT_PREPOCET_INTERVAL,
     DEFAULT_SAFE_OUTDOOR_TEMP, TEMP_SOURCE_SENSOR, TEMP_SOURCE_WEATHER, TEMP_SOURCE_SAFE,
     CALC_LOG_SIZE,
 )
+from .entity import BMSEntity
 
 _LOGGER = logging.getLogger(__name__)
+# Platformní polling používá jen BMSInfluencesLogSensor (snapshot historie).
 SCAN_INTERVAL = timedelta(minutes=30)
 
+_TEMPERATURE_KEYS = {"applied_out_temp", "raw_outdoor_temp", "curve_temp", "clamped_temp", "forecast_temp"}
+_HUMIDITY_KEYS = {"actual_humidity", "forecast_humidity"}
 
-async def async_setup_entry(hass, entry, async_add_entities):
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: HeatingCurveConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
     result_sensor = BMSResultSensor(hass, entry)
     diag_sensors = [
         BMSDiagSensor(hass, entry, "Venkovní teplota použitá",  "applied_out_temp", "°C"),
@@ -54,21 +81,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
         BMSWeatherSensor(hass, entry),
         BMSInfluencesLogSensor(hass, entry),
     ]
-    hass.data[DOMAIN][entry.entry_id]["diag_sensors"] = diag_sensors
-    hass.data[DOMAIN][entry.entry_id]["result_sensor"] = result_sensor
+    entry.runtime_data["diag_sensors"] = diag_sensors
+    entry.runtime_data["result_sensor"] = result_sensor
     async_add_entities([result_sensor] + diag_sensors, False)
-
-    @callback
-    def _on_ha_started(_event):
-        hass.async_create_task(_initial_update())
-
-    async def _initial_update():
-        # Nastavit SCAN_INTERVAL z uložené hodnoty před prvním updatem
-        _apply_scan_interval(result_sensor, hass, entry)
-        await result_sensor.async_update()
-        result_sensor.async_write_ha_state()
-
-    hass.bus.async_listen_once("homeassistant_started", _on_ha_started)
 
     # ── Hystereze — sledování venkovní teploty ───────────────────────────────
     # Při změně venkovní teploty o delta °C spustit přepočet (pokud je režim "teplota" nebo "oboji")
@@ -78,8 +93,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     if track_outdoor:
         @callback
-        def _on_outdoor_temp_changed(event):
-            new_state = event.data.get("new_state")
+        def _on_outdoor_temp_changed(event: Event[EventStateChangedData]) -> None:
+            new_state = event.data["new_state"]
             if new_state is None or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 return
             rezim = hass.states.get("select.bms_prepocet_rezim")
@@ -94,15 +109,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
                     new_temp = float(attrs.get("temperature", 0))
                 except (ValueError, TypeError):
                     return
-            last_temp = hass.data[DOMAIN][entry.entry_id].get("last_compute_temp")
+            last_temp = entry.runtime_data.get("last_compute_temp")
             delta = hass.states.get("number.bms_prepocet_delta")
             delta_val = float(delta.state) if delta and delta.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN) else 0.5
             if last_temp is None or abs(new_temp - last_temp) >= delta_val:
-                hass.data[DOMAIN][entry.entry_id]["last_compute_temp"] = new_temp
+                entry.runtime_data["last_compute_temp"] = new_temp
                 _LOGGER.debug("BMS Hystereze: teplota změněna o %.1f°C → spouštím přepočet.", abs(new_temp - (last_temp or new_temp)))
-                hass.async_create_task(_do_hysteresis_compute())
+                entry.async_create_task(hass, _do_hysteresis_compute(), "bms_hysteresis_compute")
 
-        async def _do_hysteresis_compute():
+        async def _do_hysteresis_compute() -> None:
             await result_sensor.async_refresh_data()
             result_sensor.async_write_ha_state()
 
@@ -110,41 +125,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
             async_track_state_change_event(hass, track_outdoor, _on_outdoor_temp_changed)
         )
 
-    # ── Sledování změny intervalu přepočtu ──────────────────────────────────
-    @callback
-    def _on_interval_changed(event):
-        new_state = event.data.get("new_state")
-        if new_state and new_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            _apply_scan_interval(result_sensor, hass, entry)
 
-    entry.async_on_unload(
-        async_track_state_change_event(
-            hass, ["number.bms_prepocet_interval"], _on_interval_changed
-        )
-    )
+class BMSSensorBase(BMSEntity, SensorEntity):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-
-def _apply_scan_interval(result_sensor, hass, entry):
-    """Nastaví SCAN_INTERVAL dynamicky z number.bms_prepocet_interval."""
-    s = hass.states.get("number.bms_prepocet_interval")
-    try:
-        minutes = max(1, int(float(s.state))) if s and s.state not in ("unavailable", "unknown") else 30
-    except (ValueError, TypeError):
-        minutes = 30
-    from datetime import timedelta
-    result_sensor._attr_scan_interval = timedelta(minutes=minutes)
-    _LOGGER.debug("BMS: SCAN_INTERVAL nastaven na %d min.", minutes)
-
-
-class BMSSensorBase(SensorEntity):
     def __init__(self, hass, entry, name, key, unit="°C"):
+        super().__init__(entry, "sensor", key, name)
         self._hass = hass
-        self._entry = entry
-        self._attr_name = f"BMS {name}"
-        self.entity_id = f"sensor.bms_{key}"
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_native_unit_of_measurement = unit
-        self._attr_device_info = {"identifiers": {(DOMAIN, entry.entry_id)}, "name": "BMS Regulátor"}
 
     def _num(self, key, fallback=None):
         s = self._hass.states.get(f"number.bms_{key}")
@@ -160,7 +149,7 @@ class BMSSensorBase(SensorEntity):
         return s is not None and s.state == STATE_ON
 
     def _get_curve_points(self) -> list[tuple[float, float]]:
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data = self._entry.runtime_data
         # Primárně ze Storage — spolehlivé od první inicializace
         pts = data.get("curve", {}).get("points")
         if pts:
@@ -176,10 +165,61 @@ class BMSSensorBase(SensorEntity):
 
 
 class BMSResultSensor(BMSSensorBase):
+    _attr_entity_category = None
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_should_poll = False
+    # Velké/proměnlivé atributy nemají v recorderu smysl (karta je čte jen živě)
+    _unrecorded_attributes = frozenset({"calc_log", "clamp_log", "starred_profiles", "schedules"})
+
     def __init__(self, hass, entry):
         super().__init__(hass, entry, "Výsledná teplota", "calc_temp", "°C")
         self._state = None
-        self._attr_scan_interval = SCAN_INTERVAL
+        self._unsub_interval: CALLBACK_TYPE | None = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        @callback
+        def _on_interval_changed(event: Event[EventStateChangedData]) -> None:
+            new_state = event.data["new_state"]
+            if new_state and new_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                self._async_schedule_interval()
+
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass, ["number.bms_prepocet_interval"], _on_interval_changed
+            )
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        await super().async_will_remove_from_hass()
+        if self._unsub_interval is not None:
+            self._unsub_interval()
+            self._unsub_interval = None
+
+    async def async_start(self) -> None:
+        """První výpočet po startu HA a spuštění periodického přepočtu."""
+        self._async_schedule_interval()
+        await self.async_update()
+        self.async_write_ha_state()
+
+    @callback
+    def _async_schedule_interval(self) -> None:
+        """(Pře)naplánuje periodický přepočet podle number.bms_prepocet_interval."""
+        minutes = int(self._num("prepocet_interval", DEFAULT_PREPOCET_INTERVAL) or DEFAULT_PREPOCET_INTERVAL)
+        minutes = max(1, minutes)
+        if self._unsub_interval is not None:
+            self._unsub_interval()
+        self._unsub_interval = async_track_time_interval(
+            self.hass, self._async_interval_tick, timedelta(minutes=minutes),
+            name="BMS periodický přepočet",
+        )
+        _LOGGER.debug("BMS: Interval přepočtu nastaven na %d min.", minutes)
+
+    async def _async_interval_tick(self, _now: datetime) -> None:
+        await self.async_update()
+        self.async_write_ha_state()
 
     @property
     def native_value(self):
@@ -187,8 +227,7 @@ class BMSResultSensor(BMSSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict:
-        from datetime import datetime
-        data     = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data     = self._entry.runtime_data
         profiles = data.get("profiles", {})
         # Výpočet délky výpadku senzoru v minutách
         safe_since = data.get("sensor_safe_since")
@@ -237,7 +276,7 @@ class BMSResultSensor(BMSSensorBase):
         await self._async_compute(write_thermostat=True, force_log=True)
 
     async def _async_compute(self, write_thermostat: bool = True, force_log: bool = False):
-        data = self._hass.data[DOMAIN][self._entry.entry_id]
+        data = self._entry.runtime_data
         regulation_active = self._sw("hlavni_vypinac")
 
         try:
@@ -354,7 +393,7 @@ class BMSResultSensor(BMSSensorBase):
             night_offset = 0.0
             night_active = False
             if self._sw("night_mode"):
-                now_h = datetime.now().hour
+                now_h = dt_util.now().hour
                 day_start = int(self._num("day_start", 6))
                 day_end   = int(self._num("day_end",   22))
                 # Noční = mimo denní okno
@@ -381,7 +420,6 @@ class BMSResultSensor(BMSSensorBase):
             corr_clouds = lin(applied_clouds, "oblacnost") if self._sw("vliv_oblacnost") else 0.0
 
             # ── Slunce — poloha se počítá VŽDY (pro diag senzory a UI graf) ────
-            import math
             sun_eid = self._entry.data.get(CONF_SUN)
             sun_s   = self._hass.states.get(sun_eid)
 
@@ -394,12 +432,11 @@ class BMSResultSensor(BMSSensorBase):
             # Předpovídaná poloha slunce — výpočet VŽDY (pro UI i výpočet při předpovědi)
             fc_el = fc_az = None
             try:
-                from homeassistant.helpers.sun import get_astral_location
                 offset_h_sun = int(self._num("predpoved_hodin", 24))
                 future_dt    = datetime.now(timezone.utc) + timedelta(hours=offset_h_sun)
-                location, _  = get_astral_location(self._hass)
-                fc_el = location.solar_elevation(future_dt)
-                fc_az = location.solar_azimuth(future_dt)
+                observer     = get_astral_observer(self._hass)
+                fc_el = astral_sun.elevation(observer, future_dt)
+                fc_az = astral_sun.azimuth(observer, future_dt)
                 _LOGGER.debug("BMS: Slunce (předpověď +%dh): el=%.1f° az=%.1f°", offset_h_sun, fc_el, fc_az)
             except Exception as e:
                 _LOGGER.warning("BMS: Nelze vypočítat předpovězené slunce: %s", e)
@@ -465,7 +502,6 @@ class BMSResultSensor(BMSSensorBase):
                 # Boost vypršel — zalogovat a vyslat event
                 expired_amount = boost_info.get("amount", 0)
                 expired_kind   = "boost_expired" if expired_amount > 0 else "reduction_expired"
-                from homeassistant.helpers.event import async_call_later
                 def _fire_boost_expired(_now):
                     self._hass.bus.async_fire(f"{DOMAIN}_boost_expired", {
                         "kind":   expired_kind,
@@ -475,7 +511,7 @@ class BMSResultSensor(BMSSensorBase):
                 # Zápis do logu
                 calc_log = data.get("calc_log", [])
                 calc_log.insert(0, {
-                    "time":    datetime.now().strftime("%d.%m %H:%M"),
+                    "time":    dt_util.now().strftime("%d.%m %H:%M"),
                     "event":   expired_kind,
                     "amount":  expired_amount,
                     "manual":  False,
@@ -503,7 +539,7 @@ class BMSResultSensor(BMSSensorBase):
             # ── Výpočetní log — při každém přepočtu ──────────────────────────
             calc_log  = data.get("calc_log", [])
             log_entry = {
-                "time":         datetime.now().strftime("%d.%m %H:%M"),
+                "time":         dt_util.now().strftime("%d.%m %H:%M"),
                 "ts":           int(datetime.now().timestamp()),
                 "out":          round(applied_temp,   1),
                 "curve":        round(curve_temp,     1),
@@ -631,19 +667,18 @@ class BMSResultSensor(BMSSensorBase):
             _LOGGER.error("BMS: Chyba výpočtu: %s", e, exc_info=True)
 
     def _notify_diag_sensors(self):
-        for s in self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {}).get("diag_sensors", []):
+        for s in self._entry.runtime_data.get("diag_sensors", []):
             s.async_write_ha_state()
 
     async def _evaluate_schedules(self, current_outdoor_temp: float):
         """Vyhodnotí časové plány a případně přepne profil."""
-        from datetime import datetime
-        data     = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data     = self._entry.runtime_data
         profiles = data.get("profiles", {})
         schedules = profiles.get("__schedules__", [])
         if not schedules:
             return
 
-        now      = datetime.now()
+        now      = dt_util.now()
         today_md = now.strftime("%m-%d")
 
         # Teplotní historie — průměr za temp_days dní
@@ -694,18 +729,32 @@ class BMSResultSensor(BMSSensorBase):
 
 
 class BMSDiagSensor(BMSSensorBase):
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, hass, entry, name, key, unit="°C"):
+        super().__init__(hass, entry, name, key, unit)
+        if key in _TEMPERATURE_KEYS:
+            self._attr_device_class = SensorDeviceClass.TEMPERATURE
+        elif key in _HUMIDITY_KEYS:
+            self._attr_device_class = SensorDeviceClass.HUMIDITY
+        elif unit == "km/h":
+            self._attr_device_class = SensorDeviceClass.WIND_SPEED
+        elif unit == "mm/h":
+            self._attr_device_class = SensorDeviceClass.PRECIPITATION_INTENSITY
+
     @property
     def should_poll(self) -> bool:
         return False
 
     @property
     def native_value(self):
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
-        val = data.get(self.entity_id.replace("sensor.bms_", ""))
+        val = self._entry.runtime_data.get(self._key)
         return round(val, 2) if isinstance(val, float) else val
 
 
 class BMSStorageStatusSensor(BMSSensorBase):
+    _unrecorded_attributes = frozenset({"points"})
+
     def __init__(self, hass, entry):
         super().__init__(hass, entry, "Storage křivky", "curve_storage_status", None)
         self._attr_native_unit_of_measurement = None
@@ -716,7 +765,7 @@ class BMSStorageStatusSensor(BMSSensorBase):
 
     @property
     def native_value(self) -> str:
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data = self._entry.runtime_data
         pts = data.get("curve", {}).get("points", [])
         if data.get("storage_ok") and len(pts) >= 2:
             return "OK"
@@ -724,7 +773,7 @@ class BMSStorageStatusSensor(BMSSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict:
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data = self._entry.runtime_data
         pts  = data.get("curve", {}).get("points", [])
         return {"point_count": len(pts), "storage_ok": data.get("storage_ok", False), "points": pts}
 
@@ -740,7 +789,7 @@ class BMSTempSourceSensor(BMSSensorBase):
 
     @property
     def native_value(self) -> str:
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data = self._entry.runtime_data
         return {
             TEMP_SOURCE_SENSOR:  "Senzor",
             TEMP_SOURCE_WEATHER: "Weather entita",
@@ -749,18 +798,17 @@ class BMSTempSourceSensor(BMSSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict:
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data = self._entry.runtime_data
         source = data.get("temp_source", TEMP_SOURCE_SAFE)
-        safe_s = self._hass.states.get("number.bms_safe_temp")
         return {
             "source_key":  source,
             "is_fallback": source != TEMP_SOURCE_SENSOR,
-            "safe_temp":   float(safe_s.state) if safe_s else DEFAULT_SAFE_OUTDOOR_TEMP,
+            "safe_temp":   self._num("safe_temp", DEFAULT_SAFE_OUTDOOR_TEMP),
         }
 
     @property
     def icon(self) -> str:
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data = self._entry.runtime_data
         return {
             TEMP_SOURCE_SENSOR:  "mdi:thermometer",
             TEMP_SOURCE_WEATHER: "mdi:weather-partly-cloudy",
@@ -781,7 +829,7 @@ class BMSBoostSensor(BMSSensorBase):
 
     @property
     def native_value(self) -> str:
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data = self._entry.runtime_data
         boost = data.get("boost", {})
         if not boost.get("active"):
             return "inactive"
@@ -790,9 +838,9 @@ class BMSBoostSensor(BMSSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict:
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data = self._entry.runtime_data
         boost = data.get("boost", {})
-        now_ts = datetime.now(timezone.utc).timestamp()
+        now_ts = dt_util.utcnow().timestamp()
         until_ts = boost.get("until", 0)
         remaining_min = max(0, int((until_ts - now_ts) / 60)) if boost.get("active") else 0
         return {
@@ -808,12 +856,14 @@ class BMSWeatherSensor(BMSSensorBase):
     Při každé změně weather entity (typicky každou hodinu) automaticky:
     - Načte aktuální data (vítr, srážky, oblačnost, vlhkost)
     - Fetchne forecast na nastavený počet hodin dopředu
-    - Uloží vše do hass.data i do vlastních atributů
+    - Uloží vše do runtime_data i do vlastních atributů
     - Notifikuje ostatní diag senzory aby se překreslily
 
     Tím pádem jsou forecast hodnoty dostupné ihned po startu HA,
     bez čekání na 30min scan interval BMSResultSensor.
     """
+
+    _unrecorded_attributes = frozenset({"hourly_chart_data"})
 
     def __init__(self, hass, entry):
         super().__init__(hass, entry, "Počasí stav", "weather_status", None)
@@ -827,13 +877,12 @@ class BMSWeatherSensor(BMSSensorBase):
 
     @property
     def native_value(self) -> str:
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
-        fc_wind = data.get("forecast_wind")
+        fc_wind = self._entry.runtime_data.get("forecast_wind")
         return "forecast_ok" if fc_wind is not None else "no_forecast"
 
     @property
     def extra_state_attributes(self) -> dict:
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data = self._entry.runtime_data
         return {
             "actual_wind":       data.get("actual_wind"),
             "actual_rain":       data.get("actual_rain"),
@@ -856,21 +905,18 @@ class BMSWeatherSensor(BMSSensorBase):
 
         # Okamžitý fetch při startu (s malým zpožděním aby byla weather entita ready)
         async def _startup_fetch():
-            import asyncio
             await asyncio.sleep(3)
-            await self._fetch_and_store()
+            await self.async_fetch_and_store()
 
-        self.hass.async_create_task(_startup_fetch())
+        self._entry.async_create_background_task(self.hass, _startup_fetch(), "bms_weather_startup_fetch")
 
         # Sledování změn weather entity — s 60s debounce (weather se mění každou minutu u některých integrací)
-        from homeassistant.helpers.event import async_track_state_change_event
-
-        _debounce_task = None
+        _debounce_task: asyncio.Task | None = None
 
         @callback
-        def _on_weather_state_changed(event):
-            nonlocal _debounce_task  # jediná deklarace, na začátku funkce
-            new_state = event.data.get("new_state")
+        def _on_weather_state_changed(event: Event[EventStateChangedData]) -> None:
+            nonlocal _debounce_task
+            new_state = event.data["new_state"]
             if new_state is None or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 return
             # Zrušit předchozí čekající task
@@ -878,11 +924,12 @@ class BMSWeatherSensor(BMSSensorBase):
                 _debounce_task.cancel()
 
             async def _delayed_fetch():
-                import asyncio
                 await asyncio.sleep(60)
-                await self._fetch_and_store()
+                await self.async_fetch_and_store()
 
-            _debounce_task = self.hass.async_create_task(_delayed_fetch())
+            _debounce_task = self._entry.async_create_background_task(
+                self.hass, _delayed_fetch(), "bms_weather_debounced_fetch"
+            )
 
         self.async_on_remove(
             async_track_state_change_event(
@@ -890,13 +937,13 @@ class BMSWeatherSensor(BMSSensorBase):
             )
         )
 
-    async def _fetch_and_store(self) -> None:
-        """Fetchne aktuální data a forecast, uloží do hass.data, notifikuje senzory."""
+    async def async_fetch_and_store(self) -> None:
+        """Fetchne aktuální data a forecast, uloží do runtime_data, notifikuje senzory."""
         weather_eid = self._entry.data.get(CONF_WEATHER)
         if not weather_eid:
             return
 
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data = self._entry.runtime_data
         weather_state = self._hass.states.get(weather_eid)
 
         # ── Aktuální data ────────────────────────────────────────────────────
@@ -957,7 +1004,7 @@ class BMSWeatherSensor(BMSSensorBase):
         except Exception as e:
             _LOGGER.warning("BMS Weather: chyba forecast fetche: %s", e)
 
-        # ── Uložit do hass.data ──────────────────────────────────────────────
+        # ── Uložit do runtime_data ──────────────────────────────────────────────
         data.update({
             "actual_wind":        round(actual_wind,    1),
             "actual_rain":        round(actual_rain,    1),
@@ -973,12 +1020,12 @@ class BMSWeatherSensor(BMSSensorBase):
 
         # ── Notifikovat všechny diag senzory ─────────────────────────────────
         self.async_write_ha_state()
-        for s in self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {}).get("diag_sensors", []):
+        for s in data.get("diag_sensors", []):
             s.async_write_ha_state()
 
         # ── Spustit přepočet výsledné teploty (bez zápisu na termostat) ──────
         # Tím se ihned aktualizují corr_sun, korekce vlivů a všechny diag senzory.
-        result_sensor = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {}).get("result_sensor")
+        result_sensor = data.get("result_sensor")
         if result_sensor and hasattr(result_sensor, "async_refresh_data"):
             try:
                 await result_sensor.async_refresh_data()
@@ -996,9 +1043,10 @@ class BMSInfluencesLogSensor(BMSSensorBase):
 
     MAX_HIST = 30
     SNAPSHOT_INTERVAL = 1800
+    _unrecorded_attributes = frozenset({"history", "forecast", "ts_generated"})
 
     def __init__(self, hass, entry):
-        super().__init__(hass, entry, "BMS Influences Log", "influences_log", None)
+        super().__init__(hass, entry, "Log vnějších vlivů", "influences_log", None)
         self._attr_native_unit_of_measurement = None
         self._history:  list[dict] = []   # historické snapshoty [-24h → nyní]
         self._forecast: list[dict] = []   # předpovídané hodnoty [nyní → +24h]
@@ -1006,7 +1054,7 @@ class BMSInfluencesLogSensor(BMSSensorBase):
         self._initialized = False
 
     @property
-    def state(self) -> str:
+    def native_value(self) -> str:
         return f"{len(self._history)}h+{len(self._forecast)}fc"
 
     @property
@@ -1022,36 +1070,28 @@ class BMSInfluencesLogSensor(BMSSensorBase):
         await super().async_added_to_hass()
         # Počkat až budou ostatní entity připraveny
         async def _init():
-            import asyncio
             await asyncio.sleep(8)
             await self._load_history_from_recorder()
             await self._refresh_forecast()
             self.async_write_ha_state()
-        self._hass.async_create_task(_init())
+        self._entry.async_create_background_task(self.hass, _init(), "bms_influences_log_init")
 
         # Registrovat listener na změny weather entity pro auto-refresh forecastu
         weather_eid = self._entry.data.get(CONF_WEATHER)
         if weather_eid:
-            from homeassistant.core import callback
-
             @callback
-            def _weather_event_filter(event_data: dict) -> bool:
-                return event_data.get("entity_id") == weather_eid
+            def _on_weather_changed(_event: Event[EventStateChangedData]) -> None:
+                self._entry.async_create_background_task(
+                    self.hass, self._refresh_forecast(), "bms_influences_log_forecast"
+                )
 
-            @callback
-            def _on_weather_changed(_event):
-                self._hass.async_create_task(self._refresh_forecast())
-
-            self._hass.bus.async_listen(
-                "state_changed",
-                _on_weather_changed,
-                event_filter=_weather_event_filter,
+            self.async_on_remove(
+                async_track_state_change_event(self.hass, [weather_eid], _on_weather_changed)
             )
 
     async def _load_history_from_recorder(self) -> None:
         """Načte historická data ze HA recorder pro weather senzory (-24h)."""
-        from datetime import timezone as _tz
-        now_utc = datetime.now(_tz.utc)
+        now_utc = dt_util.utcnow()
         start   = now_utc - timedelta(hours=25)
 
         weather_eid = self._entry.data.get(CONF_WEATHER)
@@ -1060,9 +1100,6 @@ class BMSInfluencesLogSensor(BMSSensorBase):
             return
 
         try:
-            from homeassistant.components.recorder import get_instance
-            from homeassistant.components.recorder.history import get_significant_states
-
             instance = get_instance(self._hass)
             entity_ids = [eid for eid in [weather_eid, outdoor_eid] if eid]
             states_dict = await instance.async_add_executor_job(
@@ -1115,7 +1152,7 @@ class BMSInfluencesLogSensor(BMSSensorBase):
 
     async def _add_current_snapshot(self) -> None:
         """Přidá snapshot aktuálních hodnot do historie."""
-        data = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        data = self._entry.runtime_data
         now_ts = int(datetime.now().timestamp())
         snap = {
             "ts":         now_ts,
@@ -1135,7 +1172,6 @@ class BMSInfluencesLogSensor(BMSSensorBase):
 
     async def _refresh_forecast(self) -> None:
         """Načte hodinovou předpověď z weather entity (+24h)."""
-        from datetime import timezone as _tz
         weather_eid = self._entry.data.get(CONF_WEATHER)
         if not weather_eid:
             return
@@ -1159,7 +1195,7 @@ class BMSInfluencesLogSensor(BMSSensorBase):
                 if resp2 and weather_eid in resp2:
                     forecasts = resp2[weather_eid].get("forecast", [])
 
-            now_utc = datetime.now(_tz.utc)
+            now_utc = dt_util.utcnow()
             result  = []
             for f in forecasts:
                 try:

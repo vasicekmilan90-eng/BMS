@@ -1,6 +1,12 @@
+from __future__ import annotations
+
 from homeassistant.components.number import RestoreNumber
+from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
+from . import HeatingCurveConfigEntry
 from .const import (
-    DOMAIN,
     DEFAULT_TEMP_MIN, DEFAULT_TEMP_MAX,
     DEFAULT_OUT_RANGE_MIN, DEFAULT_OUT_RANGE_MAX,
     INFLUENCE_DEFAULTS, DEFAULT_SAFE_OUTDOOR_TEMP,
@@ -11,9 +17,14 @@ from .const import (
     DEFAULT_LETNI_BYPASS_TEMP,
     DEFAULT_SAFE_CURVE_OUTDOOR, DEFAULT_SAFE_CURVE_TEMP,
 )
+from .entity import BMSEntity
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: HeatingCurveConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
     entities = []
 
     # --- Bezpečná venkovní teplota ---
@@ -76,27 +87,23 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(entities)
 
 
-class BMSNumber(RestoreNumber):
+class BMSNumber(BMSEntity, RestoreNumber):
+    _attr_entity_category = EntityCategory.CONFIG
+
     def __init__(self, entry, name, key, min_v, max_v, step, default):
+        super().__init__(entry, "number", key, name)
         self._default = default
-        self._attr_name = f"BMS {name}"
-        self.entity_id = f"number.bms_{key}"
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_native_min_value = min_v
         self._attr_native_max_value = max_v
         self._attr_native_step = step
         self._attr_native_value = default
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": "BMS Regulátor",
-        }
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last = await self.async_get_last_number_data()
         if last and last.native_value is not None:
             self._attr_native_value = last.native_value
-        self.async_write_ha_state()
 
     async def async_set_native_value(self, value: float) -> None:
         self._attr_native_value = value

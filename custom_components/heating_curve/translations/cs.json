@@ -1,0 +1,208 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nastavení BMS regulátoru",
+        "description": "Vyberte entity pro ekvitermní regulaci vytápění.",
+        "data": {
+          "target_thermostat": "Termostat (climate entita)",
+          "outdoor_sensor": "Venkovní teplotní senzor",
+          "weather_entity": "Entita počasí (weather)",
+          "sun_entity": "Entita polohy slunce (sun)"
+        },
+        "data_description": {
+          "target_thermostat": "Termostat, jehož teplotu bude regulátor nastavovat.",
+          "outdoor_sensor": "Senzor venkovní teploty — primární zdroj pro výpočet křivky.",
+          "weather_entity": "Entita počasí pro vlivy větru, srážek, vlhkosti a oblačnosti.",
+          "sun_entity": "Entita polohy slunce — obvykle sun.sun."
+        }
+      },
+      "reconfigure": {
+        "title": "Změna entit BMS regulátoru",
+        "description": "Změňte entity, se kterými regulátor pracuje. Profily, křivka ani nastavení se nemění.",
+        "data": {
+          "target_thermostat": "Termostat (climate entita)",
+          "outdoor_sensor": "Venkovní teplotní senzor",
+          "weather_entity": "Entita počasí (weather)",
+          "sun_entity": "Entita polohy slunce (sun)"
+        },
+        "data_description": {
+          "target_thermostat": "Termostat, jehož teplotu bude regulátor nastavovat.",
+          "outdoor_sensor": "Senzor venkovní teploty — primární zdroj pro výpočet křivky.",
+          "weather_entity": "Entita počasí pro vlivy větru, srážek, vlhkosti a oblačnosti.",
+          "sun_entity": "Entita polohy slunce — obvykle sun.sun."
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "BMS regulátor je již nakonfigurován. Povolena je pouze jedna instance.",
+      "reconfigure_successful": "Nastavení bylo úspěšně změněno."
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Integrace BMS regulátoru není načtena."
+    },
+    "invalid_curve_points": {
+      "message": "Topná křivka potřebuje alespoň 2 body s hodnotami x a y."
+    }
+  },
+  "services": {
+    "save_profile": {
+      "name": "Uložit profil",
+      "description": "Uloží aktuální nastavení sezónních entit (křivka, vlivy, noční mód, protimraz, boost) jako pojmenovaný profil. Nastavení integrace (limity, interval přepočtu, bypass) se do profilu neukládají.",
+      "fields": {
+        "name": {
+          "name": "Název",
+          "description": "Název profilu (nový nebo přepis stávajícího)."
+        }
+      }
+    },
+    "load_profile": {
+      "name": "Načíst profil",
+      "description": "Nastaví sezónní entity podle uloženého profilu. Nastavení integrace zůstane nezměněno.",
+      "fields": {
+        "name": {
+          "name": "Název",
+          "description": "Název profilu k načtení."
+        }
+      }
+    },
+    "delete_profile": {
+      "name": "Smazat profil",
+      "description": "Trvale odstraní profil z úložiště.",
+      "fields": {
+        "name": {
+          "name": "Název",
+          "description": "Název profilu ke smazání."
+        }
+      }
+    },
+    "set_curve_points": {
+      "name": "Nastavit body křivky",
+      "description": "Uloží celé pole bodů topné křivky do úložiště.",
+      "fields": {
+        "points": {
+          "name": "Body",
+          "description": "Pole bodů [{x: float, y: float}, ...], min. 2 body, seřazeno vzestupně podle x."
+        }
+      }
+    },
+    "get_curve_points": {
+      "name": "Načíst body křivky",
+      "description": "Vrátí aktuální body křivky a stav úložiště a vyšle event heating_curve_curve_response."
+    },
+    "retry_storage": {
+      "name": "Znovu zkusit úložiště",
+      "description": "Pokusí se znovu zapsat body křivky z paměti do úložiště (po výpadku)."
+    },
+    "activate_boost": {
+      "name": "Aktivovat boost",
+      "description": "Dočasně zvýší teplotu topení o zadaný počet °C na zadaný počet hodin.",
+      "fields": {
+        "amount": {
+          "name": "Přídavek",
+          "description": "O kolik °C zvýšit teplotu topení (výchozí 5)."
+        },
+        "hours": {
+          "name": "Trvání",
+          "description": "Jak dlouho boost trvá v hodinách (výchozí 2)."
+        }
+      }
+    },
+    "activate_reduction": {
+      "name": "Aktivovat útlum",
+      "description": "Dočasně sníží teplotu topení o zadaný počet °C na zadaný počet hodin.",
+      "fields": {
+        "amount": {
+          "name": "Snížení",
+          "description": "O kolik °C snížit teplotu topení (výchozí 5)."
+        },
+        "hours": {
+          "name": "Trvání",
+          "description": "Jak dlouho útlum trvá v hodinách (výchozí 2)."
+        }
+      }
+    },
+    "cancel_boost": {
+      "name": "Zrušit boost / útlum",
+      "description": "Okamžitě ukončí aktivní boost nebo útlum."
+    },
+    "force_refresh": {
+      "name": "Vynucený refresh",
+      "description": "Okamžitě přepočítá počasí, vlivy a výslednou teplotu topení. Nastaví termostat a zapíše záznam do výpočetního logu."
+    },
+    "set_starred": {
+      "name": "Nastavit rychlé profily",
+      "description": "Nastaví seznam hvězdičkových (rychlých) profilů zobrazovaných v kartě.",
+      "fields": {
+        "starred": {
+          "name": "Rychlé profily",
+          "description": "Seznam názvů profilů (max. 15)."
+        }
+      }
+    },
+    "save_schedule": {
+      "name": "Uložit pravidlo plánu",
+      "description": "Přidá nebo aktualizuje pravidlo automatického přepínání profilů.",
+      "fields": {
+        "id": {
+          "name": "ID",
+          "description": "ID pravidla (prázdné = nové pravidlo)."
+        },
+        "type": {
+          "name": "Typ",
+          "description": "Typ pravidla: date (datum od–do) nebo temp (teplotní podmínka)."
+        },
+        "profile": {
+          "name": "Profil",
+          "description": "Název profilu, který se aktivuje při splnění podmínky."
+        },
+        "date_from": {
+          "name": "Datum od",
+          "description": "Datum začátku ve formátu MM-DD (pro typ date)."
+        },
+        "date_to": {
+          "name": "Datum do",
+          "description": "Datum konce ve formátu MM-DD (pro typ date)."
+        },
+        "temp_op": {
+          "name": "Operátor",
+          "description": "Operátor porovnání pro teplotní podmínku: < nebo >."
+        },
+        "temp_val": {
+          "name": "Prahová teplota",
+          "description": "Prahová teplota pro teplotní podmínku (°C)."
+        },
+        "temp_days": {
+          "name": "Počet dní",
+          "description": "Podmínka musí platit alespoň tento počet dní (průměr)."
+        },
+        "enabled": {
+          "name": "Aktivní",
+          "description": "Zda je pravidlo aktivní (výchozí ano)."
+        }
+      }
+    },
+    "delete_schedule": {
+      "name": "Smazat pravidlo plánu",
+      "description": "Odstraní pravidlo automatického přepínání profilů podle jeho ID.",
+      "fields": {
+        "id": {
+          "name": "ID",
+          "description": "ID pravidla ke smazání."
+        }
+      }
+    },
+    "reorder_schedules": {
+      "name": "Přeřadit pravidla plánů",
+      "description": "Změní pořadí vyhodnocování pravidel automatického přepínání profilů.",
+      "fields": {
+        "order": {
+          "name": "Pořadí",
+          "description": "Seznam ID pravidel v novém pořadí."
+        }
+      }
+    }
+  }
+}

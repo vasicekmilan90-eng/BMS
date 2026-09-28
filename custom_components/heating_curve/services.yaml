@@ -1,0 +1,151 @@
+save_profile:
+  fields:
+    name:
+      example: "Silné mrazy"
+      required: true
+      selector:
+        text:
+
+load_profile:
+  fields:
+    name:
+      required: true
+      selector:
+        text:
+
+delete_profile:
+  fields:
+    name:
+      required: true
+      selector:
+        text:
+
+set_curve_points:
+  fields:
+    points:
+      example: '[{"x": -20, "y": 70}, {"x": 0, "y": 45}, {"x": 20, "y": 20}]'
+      required: true
+      selector:
+        object:
+
+get_curve_points:
+
+retry_storage:
+
+activate_boost:
+  fields:
+    amount:
+      example: 5
+      required: false
+      selector:
+        number:
+          min: 0.5
+          max: 20
+          step: 0.5
+          unit_of_measurement: "°C"
+    hours:
+      example: 2
+      required: false
+      selector:
+        number:
+          min: 0.5
+          max: 24
+          step: 0.5
+          unit_of_measurement: "h"
+
+activate_reduction:
+  fields:
+    amount:
+      example: 5
+      required: false
+      selector:
+        number:
+          min: 0.5
+          max: 20
+          step: 0.5
+          unit_of_measurement: "°C"
+    hours:
+      example: 2
+      required: false
+      selector:
+        number:
+          min: 0.5
+          max: 24
+          step: 0.5
+          unit_of_measurement: "h"
+
+cancel_boost:
+
+force_refresh:
+
+set_starred:
+  fields:
+    starred:
+      example: '["Zima", "Jaro/Podzim", "Léto"]'
+      required: true
+      selector:
+        object:
+
+save_schedule:
+  fields:
+    id:
+      required: false
+      selector:
+        text:
+    type:
+      required: true
+      selector:
+        select:
+          options: ["date", "temp"]
+    profile:
+      required: true
+      selector:
+        text:
+    date_from:
+      example: "11-01"
+      required: false
+      selector:
+        text:
+    date_to:
+      example: "03-31"
+      required: false
+      selector:
+        text:
+    temp_op:
+      required: false
+      selector:
+        select:
+          options: ["<", ">"]
+    temp_val:
+      required: false
+      selector:
+        number:
+          min: -30
+          max: 40
+          step: 0.5
+          unit_of_measurement: "°C"
+    temp_days:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 30
+          step: 1
+    enabled:
+      required: false
+      selector:
+        boolean:
+
+delete_schedule:
+  fields:
+    id:
+      required: true
+      selector:
+        text:
+
+reorder_schedules:
+  fields:
+    order:
+      required: true
+      selector:
+        object:

@@ -1,0 +1,15 @@
+{
+  "domain": "heating_curve",
+  "name": "Chytrý ekvitermní regulátor (BMS)",
+  "after_dependencies": ["recorder"],
+  "codeowners": ["@vasicekmilan90-eng"],
+  "config_flow": true,
+  "dependencies": ["frontend", "http"],
+  "documentation": "https://github.com/vasicekmilan90-eng/BMS",
+  "integration_type": "device",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/vasicekmilan90-eng/BMS/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "3.0.0"
+}

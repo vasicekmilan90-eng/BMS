@@ -1,9 +1,20 @@
-// BMS Master Card v5.1 — kompaktní layout: teploty → boost/útlum → rychlé profily → správa profilů → graf
-// Načtení Chart.js — lokální soubor primárně, CDN jako záloha
-// Lokální soubor: zkopírujte chart.umd.min.js do /config/www/community/BMS/
+// BMS Master Card v5.2 — kompaktní layout: teploty → boost/útlum → rychlé profily → správa profilů → graf
+// Kartu i Chart.js servíruje integrace heating_curve na /heating_curve/ — ruční registrace resource není potřeba.
+const BMS_CARD_VERSION = "5.2.0";
+const BMS_STATIC_BASE = "/heating_curve";
+
+console.info(`%c BMS-MASTER-CARD %c v${BMS_CARD_VERSION} `,
+  "color:#fff;background:#1D9E75;font-weight:600", "color:#1D9E75;background:transparent");
+
+// Escapování textu vkládaného do innerHTML (názvy profilů apod. zadává uživatel)
+const escHtml = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => (
+  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+));
+
+// Načtení Chart.js — lokální soubor z integrace primárně, CDN jako záloha
 (function () {
   if (window.Chart) return;
-  const LOCAL_PATH = "/local/community/BMS/chart.umd.min.js";
+  const LOCAL_PATH = `${BMS_STATIC_BASE}/chart.umd.min.js`;
   const CDN_PRIMARY = "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js";
 
   const onLoad = () => {
@@ -23,22 +34,25 @@
     s.onload = onLoad;
     s.onerror = () => {
       if (fallback) loadScript(fallback, null);
-      else console.warn("BMS: Nepodařilo se načíst Chart.js. Zkopírujte chart.umd.min.js do /config/www/community/BMS/");
+      else console.warn(`BMS: Nepodařilo se načíst Chart.js (${LOCAL_PATH} ani CDN).`);
     };
     document.head.appendChild(s);
   };
 
-  // Zkus lokální soubor → CDN primary → CDN fallback
+  // Zkus lokální soubor → CDN
   loadScript(LOCAL_PATH, CDN_PRIMARY);
 })();
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "bms-master-card",
-  name: "BMS Regulátor vytápění",
-  description: "Ekvitermní regulace s topnou křivkou a vlivy počasí",
-  preview: true,
-});
+if (!window.customCards.some((c) => c.type === "bms-master-card")) {
+  window.customCards.push({
+    type: "bms-master-card",
+    name: "BMS Regulátor vytápění",
+    description: "Ekvitermní regulace s topnou křivkou a vlivy počasí",
+    preview: true,
+    documentationURL: "https://github.com/vasicekmilan90-eng/BMS",
+  });
+}
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 const CARD_STYLE = `
@@ -65,7 +79,7 @@ ha-card { overflow: hidden; }
   --c-reduce:   #378ADD;  /* modrá — útlum (topí míň) */
 }
 ha-card { padding: 0 !important; overflow: hidden; border-radius: 12px !important; }
-.bms { padding: 16px; font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif); color: var(--primary-text-color); }
+.bms { padding: 16px; font-family: var(--ha-font-family-body, Roboto, sans-serif); color: var(--primary-text-color); }
 
 /* ── Hlavička s vypínačem + stavová lišta ── */
 .bms-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0; }
@@ -627,6 +641,10 @@ class BMSMasterCard extends HTMLElement {
   }
 
   disconnectedCallback() {
+    if (this._boostExpiredSub) {
+      this._boostExpiredSub.then((unsub) => unsub()).catch(() => {});
+      this._boostExpiredSub = null;
+    }
     if (this._boostCountdownTimer) clearInterval(this._boostCountdownTimer);
     if (this._timeAxisTimer) clearInterval(this._timeAxisTimer);
     if (this._autoRefreshTimer) clearTimeout(this._autoRefreshTimer);
@@ -639,6 +657,11 @@ class BMSMasterCard extends HTMLElement {
 
   getCardSize() { return 8; }
 
+  // Sections view — karta je široká, výška se řídí obsahem
+  getGridOptions() {
+    return { columns: "full", min_columns: 6 };
+  }
+
   set hass(hass) {
     this._hass = hass;
     if (this._needsBuild || !this.shadowRoot.querySelector("ha-card")) {
@@ -646,8 +669,8 @@ class BMSMasterCard extends HTMLElement {
       this._needsBuild = false;
     }
     if (!this._chartInitDone) this._updateChart();
-    // Přihlásit se k boost_expired eventu jednou po inicializaci
-    if (!this._boostExpiredSub && hass.connection) {
+    // Přihlásit se k boost_expired eventu jednou po připojení (odhlášení v disconnectedCallback)
+    if (!this._boostExpiredSub && hass.connection && this.isConnected) {
       this._boostExpiredSub = hass.connection.subscribeEvents((event) => {
         const d = event.data || {};
         const isBoost = d.kind === "boost_expired";
@@ -668,8 +691,8 @@ class BMSMasterCard extends HTMLElement {
       // Zobrazit chybu přímo v kartě pro snadnou diagnostiku
       this.shadowRoot.innerHTML = `<ha-card style="padding:16px;color:red;font-family:monospace;font-size:12px">
         <b>BMS karta — chyba při načítání:</b><br><br>
-        ${err.message}<br><br>
-        <pre>${err.stack?.split('\n').slice(0,5).join('\n') || ''}</pre>
+        ${escHtml(err.message)}<br><br>
+        <pre>${escHtml(err.stack?.split('\n').slice(0,5).join('\n') || '')}</pre>
       </ha-card>`;
     }
   }
@@ -1693,11 +1716,13 @@ class BMSMasterCard extends HTMLElement {
       btn.style.opacity = "0.65";
       if (statusEl) { statusEl.style.display = "none"; }
 
-      this._hass.callService("heating_curve", "force_refresh", {});
-
-      // Naslouchat na HA event s výsledkem
-      const cleanup = this._hass.connection.subscribeEvents((event) => {
-        cleanup(); // odhlásit se po prvním eventu
+      // Nejdřív se přihlásit k eventu s výsledkem, pak zavolat službu (jinak může event utéct)
+      let unsub = null;
+      let done = false;
+      this._hass.connection.subscribeEvents((event) => {
+        if (done) return;
+        done = true;
+        if (unsub) unsub(); // odhlásit se po prvním eventu
         const d = event.data || {};
         const ok = d.status === "ok";
         const partial = d.status === "partial";
@@ -1717,7 +1742,14 @@ class BMSMasterCard extends HTMLElement {
         btn.disabled = false;
         btn.textContent = "↻ Refresh";
         btn.style.opacity = "1";
-      }, "heating_curve_force_refresh_done");
+      }, "heating_curve_force_refresh_done").then((u) => {
+        unsub = u;
+        if (done) { u(); return; }
+        this._hass.callService("heating_curve", "force_refresh", {});
+      }).catch((err) => {
+        console.warn("BMS: přihlášení k eventu selhalo, volám refresh bez zpětné vazby:", err);
+        this._hass.callService("heating_curve", "force_refresh", {});
+      });
 
       // Timeout pojistka — odblokovat tlačítko i bez eventu
       setTimeout(() => {
@@ -2309,7 +2341,7 @@ class BMSMasterCard extends HTMLElement {
       if (profSelect.dataset.lastOpts !== optKeys) {
         profSelect.dataset.lastOpts = optKeys;
         profSelect.innerHTML = profOptions.map(p =>
-          `<option value="${p}">${p}</option>`
+          `<option value="${escHtml(p)}">${escHtml(p)}</option>`
         ).join("");
       }
       // Synchronizovat na aktivní profil — jen pokud uživatel právě nevybírá
@@ -2998,7 +3030,7 @@ class BMSMasterCard extends HTMLElement {
     alertBar.style.color       = col.color;
     alertBar.style.borderColor = col.border;
     alertBar.style.border      = `1px solid ${col.border}`;
-    alertBar.innerHTML = `<span>${col.icon} ${msg}</span>`;
+    alertBar.innerHTML = `<span>${col.icon} ${escHtml(msg)}</span>`;
     alertBar.className = "alert-bar show";
     if (this._toastTimer) clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => {
@@ -3059,7 +3091,7 @@ class BMSMasterCard extends HTMLElement {
     let txt = "";
     // Název aktivního profilu jako první — pokud není Výchozí
     if (activeProf && activeProf !== "Výchozí") {
-      txt += `<span class="sum-tag" style="background:rgba(29,158,117,.13);color:#0F6E56;border:1px solid rgba(29,158,117,.25)">📋 ${activeProf}</span> `;
+      txt += `<span class="sum-tag" style="background:rgba(29,158,117,.13);color:#0F6E56;border:1px solid rgba(29,158,117,.25)">📋 ${escHtml(activeProf)}</span> `;
     }
     txt += `Topím na <strong>${result.toFixed(1)} °C</strong> — křivka ${curveTemp.toFixed(1)}°C`;
     if (parts.length) txt += `, ${parts.join(", ")}`;
@@ -3215,9 +3247,9 @@ class BMSMasterCard extends HTMLElement {
       // Popis pravidla
       let desc = "";
       if (rule.type === "date") {
-        desc = `📅 ${rule.date_from || "?"} – ${rule.date_to || "?"} → <strong>${rule.profile}</strong>`;
+        desc = `📅 ${escHtml(rule.date_from || "?")} – ${escHtml(rule.date_to || "?")} → <strong>${escHtml(rule.profile)}</strong>`;
       } else {
-        desc = `🌡 venku ${rule.temp_op} ${rule.temp_val}°C po ${rule.temp_days} d → <strong>${rule.profile}</strong>`;
+        desc = `🌡 venku ${escHtml(rule.temp_op)} ${escHtml(rule.temp_val)}°C po ${escHtml(rule.temp_days)} d → <strong>${escHtml(rule.profile)}</strong>`;
       }
 
       // Pořadí
@@ -3289,9 +3321,9 @@ class BMSMasterCard extends HTMLElement {
       <div id="sch-date-fields" style="display:${r.type==="date"?"block":"none"};margin-bottom:10px">
         <label style="font-size:12px;color:var(--secondary-text-color)">Datum od–do (MM-DD)</label>
         <div style="display:flex;gap:8px;margin-top:4px">
-          <input id="sch-from" type="text" placeholder="11-01" title="Datum začátku ve formátu MM-DD (měsíc-den), např. 11-01 pro 1. listopadu." value="${r.date_from||""}" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color);font-size:13px">
+          <input id="sch-from" type="text" placeholder="11-01" title="Datum začátku ve formátu MM-DD (měsíc-den), např. 11-01 pro 1. listopadu." value="${escHtml(r.date_from||"")}" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color);font-size:13px">
           <span style="align-self:center">–</span>
-          <input id="sch-to" type="text" placeholder="03-31" title="Datum konce ve formátu MM-DD (měsíc-den), např. 03-31 pro 31. března. Pravidlo funguje i přes přelom roku." value="${r.date_to||""}" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color);font-size:13px">
+          <input id="sch-to" type="text" placeholder="03-31" title="Datum konce ve formátu MM-DD (měsíc-den), např. 03-31 pro 31. března. Pravidlo funguje i přes přelom roku." value="${escHtml(r.date_to||"")}" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color);font-size:13px">
         </div>
       </div>
       <div id="sch-temp-fields" style="display:${r.type==="temp"?"block":"none"};margin-bottom:10px">
@@ -3302,15 +3334,15 @@ class BMSMasterCard extends HTMLElement {
             <option value="<" ${r.temp_op==="<"?"selected":""}>pod</option>
             <option value=">" ${r.temp_op===">"?"selected":""}>nad</option>
           </select>
-          <input id="sch-val" type="number" title="Prahová teplota pro teplotní podmínku (°C)." value="${r.temp_val}" style="width:56px;padding:5px 6px;border-radius:6px;border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color);font-size:13px"> °C
+          <input id="sch-val" type="number" title="Prahová teplota pro teplotní podmínku (°C)." value="${escHtml(r.temp_val)}" style="width:56px;padding:5px 6px;border-radius:6px;border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color);font-size:13px"> °C
           <span style="font-size:12px">déle než</span>
-          <input id="sch-days" type="number" min="1" max="30" title="Podmínka musí být splněna alespoň tento počet dní v kuse (průměr za posledních N dní)." value="${r.temp_days}" style="width:44px;padding:5px 6px;border-radius:6px;border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color);font-size:13px"> <span style="font-size:12px">dní</span>
+          <input id="sch-days" type="number" min="1" max="30" title="Podmínka musí být splněna alespoň tento počet dní v kuse (průměr za posledních N dní)." value="${escHtml(r.temp_days)}" style="width:44px;padding:5px 6px;border-radius:6px;border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color);font-size:13px"> <span style="font-size:12px">dní</span>
         </div>
       </div>
       <div style="margin-bottom:16px">
         <label style="font-size:12px;color:var(--secondary-text-color)">Použít profil</label>
         <select id="sch-profile" title="Profil křivky který se aktivuje při splnění podmínky." style="width:100%;margin-top:4px;padding:5px 8px;border-radius:6px;border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color);font-size:13px">
-          ${options.map(p => `<option value="${p}" ${p===r.profile?"selected":""}>${p}</option>`).join("")}
+          ${options.map(p => `<option value="${escHtml(p)}" ${p===r.profile?"selected":""}>${escHtml(p)}</option>`).join("")}
         </select>
       </div>
       <div style="display:flex;gap:8px">
@@ -3682,7 +3714,7 @@ class BMSMasterCard extends HTMLElement {
       btn.disabled = !exists;
       btn.style.opacity = exists ? "1" : "0.4";
       btn.title = isActive ? `Profil "${name}" je aktivní` : (exists ? `Načíst profil "${name}"` : `Profil "${name}" neexistuje`);
-      btn.innerHTML = `<span style="font-size:13px">${isActive ? "✓" : "📋"}</span><span class="season-lbl" style="font-size:11px;margin-top:2px;color:${isActive ? "#0F6E56" : ""}">${name}</span>`;
+      btn.innerHTML = `<span style="font-size:13px">${isActive ? "✓" : "📋"}</span><span class="season-lbl" style="font-size:11px;margin-top:2px;color:${isActive ? "#0F6E56" : ""}">${escHtml(name)}</span>`;
       btn.addEventListener("click", () => {
         if (!exists || !this._hass) return;
         this._hass.callService("heating_curve", "load_profile", { name });
@@ -4895,9 +4927,10 @@ class BMSMasterCard extends HTMLElement {
     this._renderSchedules(this._hass);
   }
 
-  // HA card config
-  static getConfigElement() { return document.createElement("bms-master-card-editor"); }
+  // HA card config — karta nemá volby, vizuální editor není potřeba (HA nabídne YAML)
   static getStubConfig() { return {}; }
 }
 
-customElements.define("bms-master-card", BMSMasterCard);
+if (!customElements.get("bms-master-card")) {
+  customElements.define("bms-master-card", BMSMasterCard);
+}
