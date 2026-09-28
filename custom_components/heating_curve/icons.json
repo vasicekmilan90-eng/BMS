@@ -3,6 +3,7 @@
     "save_profile": { "service": "mdi:content-save" },
     "load_profile": { "service": "mdi:folder-open" },
     "delete_profile": { "service": "mdi:delete" },
+    "rename_profile": { "service": "mdi:rename" },
     "set_curve_points": { "service": "mdi:chart-bell-curve-cumulative" },
     "get_curve_points": { "service": "mdi:chart-line" },
     "retry_storage": { "service": "mdi:database-refresh" },

@@ -3,18 +3,16 @@
     "step": {
       "user": {
         "title": "BMS controller setup",
-        "description": "Select the entities used for weather-compensated heating control.",
+        "description": "Select the entities used for weather-compensated heating control. The sun position is calculated from the Home Assistant location.",
         "data": {
           "target_thermostat": "Thermostat (climate entity)",
           "outdoor_sensor": "Outdoor temperature sensor",
-          "weather_entity": "Weather entity",
-          "sun_entity": "Sun entity"
+          "weather_entity": "Weather entity"
         },
         "data_description": {
           "target_thermostat": "Thermostat whose target temperature the controller will set.",
           "outdoor_sensor": "Outdoor temperature sensor — primary source for the heating curve.",
-          "weather_entity": "Weather entity used for wind, precipitation, humidity and cloud influences.",
-          "sun_entity": "Sun position entity — usually sun.sun."
+          "weather_entity": "Weather entity used for the forecast and wind, precipitation, humidity and cloud influences."
         }
       },
       "reconfigure": {
@@ -23,14 +21,12 @@
         "data": {
           "target_thermostat": "Thermostat (climate entity)",
           "outdoor_sensor": "Outdoor temperature sensor",
-          "weather_entity": "Weather entity",
-          "sun_entity": "Sun entity"
+          "weather_entity": "Weather entity"
         },
         "data_description": {
           "target_thermostat": "Thermostat whose target temperature the controller will set.",
           "outdoor_sensor": "Outdoor temperature sensor — primary source for the heating curve.",
-          "weather_entity": "Weather entity used for wind, precipitation, humidity and cloud influences.",
-          "sun_entity": "Sun position entity — usually sun.sun."
+          "weather_entity": "Weather entity used for the forecast and wind, precipitation, humidity and cloud influences."
         }
       }
     },
@@ -45,6 +41,130 @@
     },
     "invalid_curve_points": {
       "message": "The heating curve needs at least 2 points with x and y values."
+    },
+    "profile_not_found": {
+      "message": "Profile \"{name}\" does not exist."
+    }
+  },
+  "issues": {
+    "missing_thermostat": {
+      "title": "BMS controller thermostat not found",
+      "description": "Entity {entity_id} was not found, so the controller cannot set the temperature. Fix it via Settings → Devices & services → BMS controller → Reconfigure."
+    },
+    "missing_outdoor_sensor": {
+      "title": "BMS controller outdoor sensor not found",
+      "description": "Entity {entity_id} was not found. The controller uses the weather temperature or the safe temperature instead. Fix it via Reconfigure."
+    },
+    "missing_weather": {
+      "title": "BMS controller weather entity not found",
+      "description": "Entity {entity_id} was not found, weather influences and the forecast are unavailable. Fix it via Reconfigure."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "problem": { "name": "Control problem" }
+    },
+    "number": {
+      "safe_temp": { "name": "Safe outdoor temperature" },
+      "rozsah_venku_min": { "name": "Outdoor range: Min" },
+      "rozsah_venku_max": { "name": "Outdoor range: Max" },
+      "limit_min": { "name": "Thermostat limit: Min" },
+      "limit_max": { "name": "Thermostat limit: Max" },
+      "predpoved_hodin": { "name": "Forecast: Horizon" },
+      "vitr_predpoved_hodin": { "name": "Wind: Forecast horizon" },
+      "srazky_predpoved_hodin": { "name": "Precipitation: Forecast horizon" },
+      "vlhkost_predpoved_hodin": { "name": "Humidity: Forecast horizon" },
+      "oblacnost_predpoved_hodin": { "name": "Clouds: Forecast horizon" },
+      "slunce_predpoved_hodin": { "name": "Sun: Forecast horizon" },
+      "frost_threshold": { "name": "Frost protection: Threshold" },
+      "frost_min_heat": { "name": "Frost protection: Min heating" },
+      "night_offset": { "name": "Night mode: Curve offset" },
+      "day_start": { "name": "Night mode: Day start" },
+      "day_end": { "name": "Night mode: Day end" },
+      "boost_amount": { "name": "Boost: Amount" },
+      "boost_hours": { "name": "Boost: Duration" },
+      "reduction_amount": { "name": "Reduction: Amount" },
+      "reduction_hours": { "name": "Reduction: Duration" },
+      "vitr_od": { "name": "Wind: Effect from" },
+      "vitr_do": { "name": "Wind: Full effect at" },
+      "vitr_max_eff": { "name": "Wind: Max correction" },
+      "srazky_od": { "name": "Precipitation: Effect from" },
+      "srazky_do": { "name": "Precipitation: Full effect at" },
+      "srazky_max_eff": { "name": "Precipitation: Max correction" },
+      "vlhkost_od": { "name": "Humidity: Effect from" },
+      "vlhkost_do": { "name": "Humidity: Full effect at" },
+      "vlhkost_max_eff": { "name": "Humidity: Max correction" },
+      "oblacnost_od": { "name": "Clouds: Effect from" },
+      "oblacnost_do": { "name": "Clouds: Full effect at" },
+      "oblacnost_max_eff": { "name": "Clouds: Max correction" },
+      "solarni_start": { "name": "Solar window: Start" },
+      "solarni_konec": { "name": "Solar window: End" },
+      "slunce_max_eff": { "name": "Sun: Max correction" },
+      "prepocet_interval": { "name": "Recalculation: Interval" },
+      "prepocet_delta": { "name": "Recalculation: Temperature change" },
+      "letni_bypass_temp": { "name": "Summer bypass: Temperature" },
+      "safe_curve_outdoor": { "name": "Safe point: Outdoor" },
+      "safe_curve_temp": { "name": "Safe point: Heating" }
+    },
+    "switch": {
+      "hlavni_vypinac": { "name": "Main switch" },
+      "pouziti_predpovedi": { "name": "Use forecast" },
+      "vliv_vitr": { "name": "Influence: Wind" },
+      "vliv_srazky": { "name": "Influence: Precipitation" },
+      "vliv_vlhkost": { "name": "Influence: Humidity" },
+      "vliv_oblacnost": { "name": "Influence: Clouds" },
+      "vliv_slunce": { "name": "Influence: Sun position" },
+      "frost_protection": { "name": "Frost protection" },
+      "night_mode": { "name": "Night mode" },
+      "letni_bypass": { "name": "Summer bypass" },
+      "vitr_predpoved": { "name": "Wind: Use forecast" },
+      "srazky_predpoved": { "name": "Precipitation: Use forecast" },
+      "vlhkost_predpoved": { "name": "Humidity: Use forecast" },
+      "oblacnost_predpoved": { "name": "Clouds: Use forecast" }
+    },
+    "select": {
+      "profil_krivky": { "name": "Curve profile" },
+      "prepocet_rezim": {
+        "name": "Recalculation: Mode",
+        "state": {
+          "cas": "By time",
+          "teplota": "By temperature change",
+          "oboji": "Time and temperature"
+        }
+      }
+    },
+    "sensor": {
+      "calc_temp": { "name": "Resulting temperature" },
+      "applied_out_temp": { "name": "Applied outdoor temperature" },
+      "raw_outdoor_temp": { "name": "Measured outdoor temperature" },
+      "curve_temp": { "name": "Curve temperature" },
+      "total_correction": { "name": "Total correction" },
+      "clamped_temp": { "name": "Result after limits" },
+      "actual_wind": { "name": "Current wind" },
+      "actual_rain": { "name": "Current precipitation" },
+      "actual_clouds": { "name": "Current cloud coverage" },
+      "actual_humidity": { "name": "Current humidity" },
+      "forecast_wind": { "name": "Forecast wind" },
+      "forecast_rain": { "name": "Forecast precipitation" },
+      "forecast_clouds": { "name": "Forecast cloud coverage" },
+      "forecast_humidity": { "name": "Forecast humidity" },
+      "forecast_temp": { "name": "Forecast temperature" },
+      "sun_elevation": { "name": "Sun elevation" },
+      "sun_azimuth": { "name": "Sun azimuth" },
+      "actual_sun_elevation": { "name": "Current sun elevation" },
+      "actual_sun_azimuth": { "name": "Current sun azimuth" },
+      "forecast_sun_elevation": { "name": "Forecast sun elevation" },
+      "forecast_sun_azimuth": { "name": "Forecast sun azimuth" },
+      "corr_wind": { "name": "Wind correction" },
+      "corr_rain": { "name": "Precipitation correction" },
+      "corr_humidity": { "name": "Humidity correction" },
+      "corr_clouds": { "name": "Cloud correction" },
+      "corr_sun": { "name": "Sun correction" },
+      "curve_storage_status": { "name": "Curve storage" },
+      "temp_source": { "name": "Outdoor temperature source" },
+      "boost_status": { "name": "Boost / reduction" },
+      "weather_status": { "name": "Weather status" },
+      "influences_log": { "name": "Influences log" }
     }
   },
   "services": {
@@ -75,6 +195,20 @@
         "name": {
           "name": "Name",
           "description": "Name of the profile to delete."
+        }
+      }
+    },
+    "rename_profile": {
+      "name": "Rename profile",
+      "description": "Renames a profile and updates quick profiles and schedule rules.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Current profile name."
+        },
+        "new_name": {
+          "name": "New name",
+          "description": "New profile name."
         }
       }
     },

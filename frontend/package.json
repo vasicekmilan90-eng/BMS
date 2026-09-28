@@ -1,0 +1,28 @@
+{
+  "name": "bms-master-card",
+  "version": "0.2.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Karta BMS regulátoru pro Home Assistant",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@rollup/plugin-typescript": "^12.1.2",
+    "rollup": "^4.34.0",
+    "tslib": "^2.8.1",
+    "typescript": "^5.7.3",
+    "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.0",
+    "lit": "^3.2.1"
+  }
+}
