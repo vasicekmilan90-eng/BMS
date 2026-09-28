@@ -1,0 +1,18 @@
+{
+  "services": {
+    "save_profile": { "service": "mdi:content-save" },
+    "load_profile": { "service": "mdi:folder-open" },
+    "delete_profile": { "service": "mdi:delete" },
+    "set_curve_points": { "service": "mdi:chart-bell-curve-cumulative" },
+    "get_curve_points": { "service": "mdi:chart-line" },
+    "retry_storage": { "service": "mdi:database-refresh" },
+    "activate_boost": { "service": "mdi:fire" },
+    "activate_reduction": { "service": "mdi:snowflake-thermometer" },
+    "cancel_boost": { "service": "mdi:cancel" },
+    "force_refresh": { "service": "mdi:refresh" },
+    "set_starred": { "service": "mdi:star" },
+    "save_schedule": { "service": "mdi:calendar-edit" },
+    "delete_schedule": { "service": "mdi:calendar-remove" },
+    "reorder_schedules": { "service": "mdi:sort" }
+  }
+}

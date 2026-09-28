@@ -1,0 +1,208 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BMS controller setup",
+        "description": "Select the entities used for weather-compensated heating control.",
+        "data": {
+          "target_thermostat": "Thermostat (climate entity)",
+          "outdoor_sensor": "Outdoor temperature sensor",
+          "weather_entity": "Weather entity",
+          "sun_entity": "Sun entity"
+        },
+        "data_description": {
+          "target_thermostat": "Thermostat whose target temperature the controller will set.",
+          "outdoor_sensor": "Outdoor temperature sensor — primary source for the heating curve.",
+          "weather_entity": "Weather entity used for wind, precipitation, humidity and cloud influences.",
+          "sun_entity": "Sun position entity — usually sun.sun."
+        }
+      },
+      "reconfigure": {
+        "title": "Change BMS controller entities",
+        "description": "Change the entities used by the controller. Profiles, curve and settings are kept.",
+        "data": {
+          "target_thermostat": "Thermostat (climate entity)",
+          "outdoor_sensor": "Outdoor temperature sensor",
+          "weather_entity": "Weather entity",
+          "sun_entity": "Sun entity"
+        },
+        "data_description": {
+          "target_thermostat": "Thermostat whose target temperature the controller will set.",
+          "outdoor_sensor": "Outdoor temperature sensor — primary source for the heating curve.",
+          "weather_entity": "Weather entity used for wind, precipitation, humidity and cloud influences.",
+          "sun_entity": "Sun position entity — usually sun.sun."
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "The BMS controller is already configured. Only a single instance is allowed.",
+      "reconfigure_successful": "Re-configuration was successful."
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "The BMS controller integration is not loaded."
+    },
+    "invalid_curve_points": {
+      "message": "The heating curve needs at least 2 points with x and y values."
+    }
+  },
+  "services": {
+    "save_profile": {
+      "name": "Save profile",
+      "description": "Saves the current seasonal settings (curve, influences, night mode, frost protection, boost) as a named profile. Integration settings (limits, recalculation interval, bypass) are not stored in profiles.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Profile name (new or existing one to overwrite)."
+        }
+      }
+    },
+    "load_profile": {
+      "name": "Load profile",
+      "description": "Applies a stored profile to the seasonal entities. Integration settings stay unchanged.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Name of the profile to load."
+        }
+      }
+    },
+    "delete_profile": {
+      "name": "Delete profile",
+      "description": "Permanently removes a profile from storage.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Name of the profile to delete."
+        }
+      }
+    },
+    "set_curve_points": {
+      "name": "Set curve points",
+      "description": "Stores the complete list of heating curve points.",
+      "fields": {
+        "points": {
+          "name": "Points",
+          "description": "List of points [{x: float, y: float}, ...], at least 2, sorted by x."
+        }
+      }
+    },
+    "get_curve_points": {
+      "name": "Get curve points",
+      "description": "Returns the current curve points and storage state and fires the heating_curve_curve_response event."
+    },
+    "retry_storage": {
+      "name": "Retry storage",
+      "description": "Tries to write the in-memory curve points to storage again (after a failure)."
+    },
+    "activate_boost": {
+      "name": "Activate boost",
+      "description": "Temporarily raises the heating temperature by the given °C for the given number of hours.",
+      "fields": {
+        "amount": {
+          "name": "Amount",
+          "description": "How many °C to add (default 5)."
+        },
+        "hours": {
+          "name": "Duration",
+          "description": "Boost duration in hours (default 2)."
+        }
+      }
+    },
+    "activate_reduction": {
+      "name": "Activate reduction",
+      "description": "Temporarily lowers the heating temperature by the given °C for the given number of hours.",
+      "fields": {
+        "amount": {
+          "name": "Amount",
+          "description": "How many °C to subtract (default 5)."
+        },
+        "hours": {
+          "name": "Duration",
+          "description": "Reduction duration in hours (default 2)."
+        }
+      }
+    },
+    "cancel_boost": {
+      "name": "Cancel boost / reduction",
+      "description": "Immediately ends an active boost or reduction."
+    },
+    "force_refresh": {
+      "name": "Force refresh",
+      "description": "Immediately recalculates weather, influences and the resulting heating temperature, sets the thermostat and writes a calculation log entry."
+    },
+    "set_starred": {
+      "name": "Set quick profiles",
+      "description": "Sets the list of starred (quick) profiles shown in the card.",
+      "fields": {
+        "starred": {
+          "name": "Quick profiles",
+          "description": "List of profile names (max. 15)."
+        }
+      }
+    },
+    "save_schedule": {
+      "name": "Save schedule rule",
+      "description": "Adds or updates an automatic profile switching rule.",
+      "fields": {
+        "id": {
+          "name": "ID",
+          "description": "Rule ID (empty = new rule)."
+        },
+        "type": {
+          "name": "Type",
+          "description": "Rule type: date (date range) or temp (temperature condition)."
+        },
+        "profile": {
+          "name": "Profile",
+          "description": "Profile activated when the condition is met."
+        },
+        "date_from": {
+          "name": "Date from",
+          "description": "Start date in MM-DD format (for type date)."
+        },
+        "date_to": {
+          "name": "Date to",
+          "description": "End date in MM-DD format (for type date)."
+        },
+        "temp_op": {
+          "name": "Operator",
+          "description": "Comparison operator for the temperature condition: < or >."
+        },
+        "temp_val": {
+          "name": "Threshold",
+          "description": "Threshold temperature for the temperature condition (°C)."
+        },
+        "temp_days": {
+          "name": "Days",
+          "description": "The condition must hold for at least this many days (average)."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Whether the rule is active (default yes)."
+        }
+      }
+    },
+    "delete_schedule": {
+      "name": "Delete schedule rule",
+      "description": "Removes an automatic profile switching rule by its ID.",
+      "fields": {
+        "id": {
+          "name": "ID",
+          "description": "ID of the rule to delete."
+        }
+      }
+    },
+    "reorder_schedules": {
+      "name": "Reorder schedule rules",
+      "description": "Changes the evaluation order of the automatic profile switching rules.",
+      "fields": {
+        "order": {
+          "name": "Order",
+          "description": "List of rule IDs in the new order."
+        }
+      }
+    }
+  }
+}

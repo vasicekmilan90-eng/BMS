@@ -1,19 +1,43 @@
+"""Config flow pro BMS regulátor."""
+
+from __future__ import annotations
+
+from typing import Any
+
 import voluptuous as vol
-from homeassistant import config_entries
+
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers import selector
-from .const import *
 
-class HeatingCurveFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    async def async_step_user(self, user_input=None):
+from .const import CONF_OUTDOOR_SENSOR, CONF_SUN, CONF_THERMOSTAT, CONF_WEATHER, DEVICE_NAME, DOMAIN
+
+DATA_SCHEMA = vol.Schema({
+    vol.Required(CONF_THERMOSTAT): selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="climate")),
+    vol.Required(CONF_OUTDOOR_SENSOR): selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
+    vol.Required(CONF_WEATHER): selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="weather")),
+    vol.Required(CONF_SUN): selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="sun")),
+})
+
+
+class HeatingCurveFlow(ConfigFlow, domain=DOMAIN):
+    """Průvodce nastavením BMS regulátoru."""
+
+    VERSION = 1
+
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(title="BMS Regulátor", data=user_input)
+            return self.async_create_entry(title=DEVICE_NAME, data=user_input)
+        return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA)
 
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        entry = self._get_reconfigure_entry()
+        if user_input is not None:
+            return self.async_update_reload_and_abort(entry, data_updates=user_input)
         return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema({
-                vol.Required(CONF_THERMOSTAT): selector.EntitySelector(selector.EntitySelectorConfig(domain="climate")),
-                vol.Required(CONF_OUTDOOR_SENSOR): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
-                vol.Required(CONF_WEATHER): selector.EntitySelector(selector.EntitySelectorConfig(domain="weather")),
-                vol.Required(CONF_SUN): selector.EntitySelector(selector.EntitySelectorConfig(domain="sun")),
-            })
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(DATA_SCHEMA, entry.data),
         )

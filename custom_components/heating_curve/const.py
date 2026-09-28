@@ -1,5 +1,14 @@
+from homeassistant.const import Platform
+
 DOMAIN = "heating_curve"
-PLATFORMS = ["sensor", "number", "switch", "select"]
+PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.SWITCH, Platform.SELECT]
+
+# ── Frontend (karta dodávaná integrací) ──────────────────────────────────────
+FRONTEND_URL_BASE = f"/{DOMAIN}"
+CARD_FILENAME     = "bms-master-card.js"
+
+DEVICE_NAME       = "BMS Regulátor"
+DEFAULT_PROFILE   = "Výchozí"
 
 CONF_THERMOSTAT    = "target_thermostat"
 CONF_OUTDOOR_SENSOR = "outdoor_sensor"
@@ -48,7 +57,6 @@ DEFAULT_DAY_END         = 22     # hodina konce dne
 DEFAULT_BOOST_AMOUNT    = 5.0    # °C — výchozí boost
 DEFAULT_BOOST_HOURS     = 2      # hodiny — výchozí doba
 DEFAULT_REDUCTION_AMOUNT = 5.0  # °C — výchozí útlum
-CALC_LOG_SIZE           = 10    # počet uchovaných záznamů v logu
 # ── Hystereze / interval přepočtu ─────────────────────────────────────────────
 DEFAULT_PREPOCET_INTERVAL   = 30    # minut
 DEFAULT_PREPOCET_DELTA      = 0.5   # °C — změna venkovní teploty pro přepočet
@@ -60,7 +68,7 @@ DEFAULT_LETNI_BYPASS_TEMP   = 18.0  # °C — venkovní teplota pro bypass
 DEFAULT_SAFE_CURVE_OUTDOOR  = 0.0   # °C — venkovní teplota bezpečného bodu
 DEFAULT_SAFE_CURVE_TEMP     = 40.0  # °C — výstupní teplota bezpečného bodu
 
-CALC_LOG_SIZE = 20   # zvýšit na 20 záznamů
+CALC_LOG_SIZE = 20   # počet uchovaných záznamů ve výpočetním logu
 
 # ── Whitelist entit pro profil křivky ─────────────────────────────────────────
 # Tyto entity se ukládají a obnovují při přepínání profilů.
