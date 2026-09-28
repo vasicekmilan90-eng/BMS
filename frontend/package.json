@@ -1,6 +1,6 @@
 {
   "name": "bms-master-card",
-  "version": "0.2.0-beta.1",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "description": "Karta BMS regulátoru pro Home Assistant",
