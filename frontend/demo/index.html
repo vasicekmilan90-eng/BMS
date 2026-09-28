@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <title>BMS karta – demo</title>
+  <style>
+    body { margin: 0; padding: 24px; background: #f3f3f3; font-family: Roboto, sans-serif;
+           --primary-color: #03a9f4; --primary-text-color: #212121; --secondary-text-color: #727272;
+           --card-background-color: #fff; --divider-color: rgba(0,0,0,.12); --text-primary-color: #fff; }
+    body.dark { background: #111; --primary-text-color: #e1e1e1; --secondary-text-color: #9b9b9b;
+                --card-background-color: #1c1c1c; --divider-color: rgba(255,255,255,.12); }
+    .cols { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
+    .toolbar { margin-bottom: 16px; display: flex; gap: 12px; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <label><input type="checkbox" id="dark" /> tmavý motiv</label>
+    <label><input type="checkbox" id="en" /> English</label>
+    <label><input type="checkbox" id="guest" /> ne-admin</label>
+  </div>
+  <div class="cols">
+    <bms-master-card id="master"></bms-master-card>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <bms-status-card id="status"></bms-status-card>
+      <bms-modes-card id="modes"></bms-modes-card>
+    </div>
+  </div>
+
+  <script type="module">
+    // Náhrady prvků HA, které v samostatné stránce nejsou
+    customElements.define("ha-card", class extends HTMLElement {
+      connectedCallback() {
+        this.style.cssText = "display:block;background:var(--card-background-color);border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.15)";
+      }
+    });
+    customElements.define("ha-icon", class extends HTMLElement {
+      static get observedAttributes() { return ["icon"]; }
+      attributeChangedCallback() { this.render(); }
+      set icon(v) { this.setAttribute("icon", v); }
+      connectedCallback() { this.render(); }
+      render() {
+        this.style.cssText = "display:inline-flex;width:var(--mdc-icon-size,24px);height:var(--mdc-icon-size,24px);border-radius:50%;background:currentColor;opacity:.35;flex-shrink:0";
+        this.title = this.getAttribute("icon") ?? "";
+      }
+    });
+    customElements.define("ha-switch", class extends HTMLElement {
+      constructor() { super(); this._checked = false; }
+      get checked() { return this._checked; }
+      set checked(v) { this._checked = Boolean(v); this.render(); }
+      connectedCallback() {
+        this.render();
+        this.onclick = () => {
+          if (this.hasAttribute("disabled")) return;
+          this.checked = !this._checked;
+          this.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+      }
+      render() {
+        this.style.cssText = `display:inline-block;width:36px;height:20px;border-radius:10px;cursor:pointer;position:relative;
+          background:${this._checked ? "var(--primary-color)" : "#999"};opacity:${this.hasAttribute("disabled") ? .4 : 1}`;
+        this.innerHTML = `<span style="position:absolute;top:2px;left:${this._checked ? 18 : 2}px;width:16px;height:16px;border-radius:50%;background:#fff"></span>`;
+      }
+    });
+
+    const snapshot = await (await fetch("./snapshot.json")).json();
+    const listeners = new Set();
+    const emit = () => listeners.forEach((cb) => cb(structuredClone(snapshot)));
+    const hass = {
+      states: {}, language: "cs", locale: { language: "cs" }, user: { is_admin: true }, themes: { darkMode: false },
+      connection: {
+        subscribeMessage: async (cb) => { listeners.add(cb); cb(structuredClone(snapshot)); return () => listeners.delete(cb); },
+        sendMessagePromise: async (msg) => {
+          console.log("ws", msg);
+          if (msg.type === "heating_curve/set_setting") { snapshot.settings[msg.key] = msg.value; emit(); return { value: msg.value }; }
+          if (msg.type === "heating_curve/export") return { profiles: {} };
+          return {};
+        },
+      },
+      callService: async (domain, service, data) => {
+        console.log("service", domain, service, data);
+        if (service === "load_profile") snapshot.active_profile = data.name;
+        if (service === "set_curve_points") snapshot.curve = data.points;
+        if (service === "cancel_boost") snapshot.boost = { active: false, effective: 0 };
+        emit();
+      },
+    };
+
+    const cards = {
+      master: { type: "custom:bms-master-card", collapsed: ["log"] },
+      status: { type: "custom:bms-status-card", compact: true },
+      modes: { type: "custom:bms-modes-card", modes: ["boost", "night"] },
+    };
+    const apply = () => {
+      for (const [id, config] of Object.entries(cards)) {
+        const el = document.getElementById(id);
+        el.setConfig(config);
+        el.hass = { ...hass };
+      }
+    };
+    await customElements.whenDefined("bms-master-card");
+    apply();
+
+    document.getElementById("dark").onchange = (e) => {
+      document.body.classList.toggle("dark", e.target.checked); hass.themes = { darkMode: e.target.checked }; apply();
+    };
+    document.getElementById("en").onchange = (e) => {
+      hass.language = e.target.checked ? "en" : "cs"; hass.locale = { language: hass.language }; apply();
+    };
+    document.getElementById("guest").onchange = (e) => { hass.user = { is_admin: !e.target.checked }; apply(); };
+  </script>
+  <script type="module" src="../../custom_components/heating_curve/frontend/bms-master-card.js"></script>
+</body>
+</html>
