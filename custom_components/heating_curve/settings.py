@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .const import INFLUENCES, MODE_TIME, RECALC_MODES
+from .const import INFLUENCES, MODE_TIME, RECALC_MODES, SUN_MODE_WINDOW, SUN_MODES
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +68,7 @@ NUMBER_SETTINGS: tuple[NumberSetting, ...] = (
     ),
     NumberSetting("solarni_start",        0,   359, 1,   140,  "°"),
     NumberSetting("solarni_konec",        1,   360, 1,   220,  "°"),
+    NumberSetting("slunce_orientace",     0,   359, 1,   180,  "°"),
     NumberSetting("slunce_max_eff",       -10, 0,   0.1, -2.0, _C),
     NumberSetting("prepocet_interval",    1,   120, 1,   30,   "min", in_profile=False),
     NumberSetting("prepocet_delta",       0.1, 5,   0.1, 0.5,  _C, in_profile=False),
@@ -95,6 +96,7 @@ SWITCH_SETTINGS: tuple[SwitchSetting, ...] = (
 
 SELECT_SETTINGS: tuple[SelectSetting, ...] = (
     SelectSetting("prepocet_rezim", tuple(RECALC_MODES), MODE_TIME),
+    SelectSetting("slunce_rezim", tuple(SUN_MODES), SUN_MODE_WINDOW, in_profile=True),
 )
 
 ALL_SETTINGS: dict[str, NumberSetting | SwitchSetting | SelectSetting] = {

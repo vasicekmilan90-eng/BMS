@@ -7,11 +7,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from .const import INFLUENCES
+from .const import INFLUENCES, SUN_MODE_DAYLIGHT, SUN_MODE_FACADE
 
 Point = tuple[float, float]
 
-SUN_ELEVATION_REF = 30.0  # ° — od této elevace má slunce plný účinek
+SUN_ELEVATION_REF = 30.0  # ° — od této elevace má slunce plný účinek (režim okno)
+SUN_HORIZON_RAMP = 10.0   # ° — u obzoru slunce slabé (atmosféra), plně od této elevace
 
 
 def interpolate_curve(points: Sequence[Point], x: float) -> float:
@@ -45,14 +46,50 @@ def sun_correction(
     max_effect: float, clouds_pct: float,
 ) -> float:
     """Korekce slunce podle elevace, polohy v solárním okně a oblačnosti."""
+    return float(max_effect) * window_factor(elevation, azimuth, az_start, az_end) * cloud_factor(clouds_pct)
+
+
+def cloud_factor(clouds_pct: float) -> float:
+    return max(0.0, 1.0 - clouds_pct / 100.0)
+
+
+def window_factor(elevation: float, azimuth: float, az_start: float, az_end: float) -> float:
+    """Pevné okno azimutu — východ a západ slunce se během roku posouvají, okno ne."""
     if elevation <= 0 or az_end <= az_start or not az_start <= azimuth <= az_end:
         return 0.0
     el_factor = min(1.0, elevation / SUN_ELEVATION_REF)
     center = (az_start + az_end) / 2.0
     half = (az_end - az_start) / 2.0
-    az_factor = max(0.0, math.cos((azimuth - center) / half * (math.pi / 2.0)))
-    cloud_factor = max(0.0, 1.0 - clouds_pct / 100.0)
-    return float(max_effect) * el_factor * az_factor * cloud_factor
+    return el_factor * max(0.0, math.cos((azimuth - center) / half * (math.pi / 2.0)))
+
+
+def facade_factor(elevation: float, azimuth: float, orientation: float) -> float:
+    """Úhel dopadu na svislá okna otočená na `orientation` — sedí po celý rok bez přenastavení."""
+    if elevation <= 0:
+        return 0.0
+    delta = (azimuth - orientation + 180.0) % 360.0 - 180.0
+    if abs(delta) >= 90.0:  # slunce za fasádou
+        return 0.0
+    incidence = math.cos(math.radians(elevation)) * math.cos(math.radians(delta))
+    return incidence * min(1.0, elevation / SUN_HORIZON_RAMP)
+
+
+def daylight_factor(elevation: float, noon_elevation: float | None) -> float:
+    """Celá doba nad obzorem: 0 při východu a západu, 1 v dnešní poledne (v létě i v zimě)."""
+    if elevation <= 0 or not noon_elevation or noon_elevation <= 0:
+        return 0.0
+    return min(1.0, math.sin(math.radians(elevation)) / math.sin(math.radians(noon_elevation)))
+
+
+def sun_factor(
+    mode: str, elevation: float, azimuth: float, settings: Mapping[str, Any], noon_elevation: float | None,
+) -> float:
+    """Podíl plného účinku slunce (0–1) bez vlivu oblačnosti."""
+    if mode == SUN_MODE_FACADE:
+        return facade_factor(elevation, azimuth, float(settings["slunce_orientace"]))
+    if mode == SUN_MODE_DAYLIGHT:
+        return daylight_factor(elevation, noon_elevation)
+    return window_factor(elevation, azimuth, float(settings["solarni_start"]), float(settings["solarni_konec"]))
 
 
 def is_night(hour: int, day_start: int, day_end: int) -> bool:
@@ -108,6 +145,7 @@ class CalcInput:
     safe_mode: bool
     curve: Sequence[Point]
     settings: Mapping[str, Any]
+    sun_noon_elevation: float | None = None
 
 
 @dataclass(slots=True)
@@ -130,6 +168,7 @@ class CalcResult:
     safe_mode: bool
     result: float
     clamped: bool
+    sun_factor: float = 0.0
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -148,11 +187,13 @@ def compute(inp: CalcInput) -> CalcResult:
         )
 
     corr_sun = 0.0
-    if s["vliv_slunce"] and inp.sun_elevation is not None and inp.sun_azimuth is not None:
-        corr_sun = sun_correction(
-            inp.sun_elevation, inp.sun_azimuth, s["solarni_start"], s["solarni_konec"],
-            s["slunce_max_eff"], inp.clouds,
+    factor = 0.0
+    if inp.sun_elevation is not None and inp.sun_azimuth is not None:
+        factor = sun_factor(
+            str(s.get("slunce_rezim", "")), inp.sun_elevation, inp.sun_azimuth, s, inp.sun_noon_elevation,
         )
+        if s["vliv_slunce"]:
+            corr_sun = float(s["slunce_max_eff"]) * factor * cloud_factor(inp.clouds)
 
     night_active = bool(s["night_mode"]) and is_night(inp.hour, int(s["day_start"]), int(s["day_end"]))
     night_offset = float(s["night_offset"]) if night_active else 0.0
@@ -187,4 +228,5 @@ def compute(inp: CalcInput) -> CalcResult:
         safe_mode=inp.safe_mode,
         result=result,
         clamped=abs(raw - result) > 0.01,
+        sun_factor=factor,
     )

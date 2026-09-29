@@ -1,9 +1,12 @@
 /** Registrace karet BMS regulátoru. */
 
 import {
-  BmsCard, BmsCurveCard, BmsInfluencesCard, BmsLogCard, BmsModesCard, BmsProfilesCard, BmsSettingsCard, BmsStatusCard,
+  BmsActionsCard, BmsAutomationsCard, BmsCard, BmsCurveCard, BmsInfluencesCard, BmsLogCard, BmsModesCard, BmsProfilesCard,
+  BmsSettingsCard, BmsStatusCard,
 } from "./card.js";
+import { registerBadge } from "./badge.js";
 import "./editor.js";
+import { registerFeatures } from "./features.js";
 import pkg from "../package.json";
 
 const VERSION = pkg.version;
@@ -23,23 +26,28 @@ declare global {
 }
 
 const DOCS = "https://github.com/vasicekmilan90-eng/BMS";
-const CARDS: [string, CustomElementConstructor, string, string][] = [
-  ["bms-master-card", BmsCard, "BMS Regulátor vytápění", "Celý regulátor — sekce lze zapínat a řadit v editoru."],
-  ["bms-status-card", BmsStatusCard, "BMS – Stav regulace", "Výsledná teplota, korekce a upozornění."],
-  ["bms-modes-card", BmsModesCard, "BMS – Režimy", "Boost, útlum, protimraz, noční mód a letní bypass."],
-  ["bms-profiles-card", BmsProfilesCard, "BMS – Profily a plány", "Rychlé profily, správa profilů a časové plány."],
-  ["bms-curve-card", BmsCurveCard, "BMS – Topná křivka", "Graf a editor topné křivky."],
-  ["bms-influences-card", BmsInfluencesCard, "BMS – Vlivy počasí", "Graf a nastavení vlivů počasí a slunce."],
-  ["bms-log-card", BmsLogCard, "BMS – Výpočetní log", "Historie výpočtů a událostí."],
-  ["bms-settings-card", BmsSettingsCard, "BMS – Nastavení", "Limity, bezpečný bod, předpověď a přepočet."],
+/** [typ, třída, název, popis, nabízet ve výběru karet] */
+const CARDS: [string, CustomElementConstructor, string, string, boolean][] = [
+  ["bms-master-card", BmsCard, "BMS Regulátor vytápění", "Celý regulátor — předvolby, sekce a jejich volby v editoru.", true],
+  ["bms-status-card", BmsStatusCard, "BMS – Stav regulace", "Výsledná teplota, termostat, rozpad výpočtu a upozornění.", true],
+  ["bms-actions-card", BmsActionsCard, "BMS – Rychlé akce", "Boost, útlum a rychlé profily.", true],
+  ["bms-automations-card", BmsAutomationsCard, "BMS – Automatiky", "Protimraz, noční útlum a letní bypass.", true],
+  ["bms-profiles-card", BmsProfilesCard, "BMS – Profily a plány", "Rychlé profily, správa profilů a časové plány.", true],
+  ["bms-curve-card", BmsCurveCard, "BMS – Topná křivka", "Graf, editor a simulace topné křivky.", true],
+  ["bms-influences-card", BmsInfluencesCard, "BMS – Vlivy počasí", "Vlivy počasí a slunce s grafem.", true],
+  ["bms-log-card", BmsLogCard, "BMS – Výpočetní log", "Historie výpočtů a událostí.", true],
+  ["bms-settings-card", BmsSettingsCard, "BMS – Nastavení", "Limity, bezpečný bod, předpověď a přepočet.", true],
+  ["bms-modes-card", BmsModesCard, "BMS – Režimy", "Starší karta (akce + automatiky).", false],
 ];
 
 window.customCards = window.customCards ?? [];
-for (const [type, ctor, name, description] of CARDS) {
+for (const [type, ctor, name, description, listed] of CARDS) {
   if (!customElements.get(type)) customElements.define(type, ctor);
-  if (!window.customCards.some((c) => c.type === type)) {
+  if (listed && !window.customCards.some((c) => c.type === type)) {
     window.customCards.push({ type, name, description, preview: true, documentationURL: DOCS });
   }
 }
+registerFeatures();
+registerBadge();
 
 console.info(`%c BMS-MASTER-CARD %c v${VERSION} `, "color:#fff;background:#43a047;font-weight:600", "color:#43a047");

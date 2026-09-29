@@ -9,7 +9,8 @@
            --card-background-color: #fff; --divider-color: rgba(0,0,0,.12); --text-primary-color: #fff; }
     body.dark { background: #111; --primary-text-color: #e1e1e1; --secondary-text-color: #9b9b9b;
                 --card-background-color: #1c1c1c; --divider-color: rgba(255,255,255,.12); }
-    .cols { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
+    .cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: 24px; align-items: start; }
+    @media (max-width: 1100px) { .cols { grid-template-columns: minmax(0, 1fr); } }
     .toolbar { margin-bottom: 16px; display: flex; gap: 12px; }
   </style>
 </head>
@@ -18,10 +19,17 @@
     <label><input type="checkbox" id="dark" /> tmavý motiv</label>
     <label><input type="checkbox" id="en" /> English</label>
     <label><input type="checkbox" id="guest" /> ne-admin</label>
+    <select id="preset"><option value="">bez předvolby</option><option>family</option><option>technician</option><option>mobile</option><option>overview</option></select>
+    <label><input type="checkbox" id="editor" /> editor</label>
   </div>
   <div class="cols">
-    <bms-master-card id="master"></bms-master-card>
+    <div><bms-master-card id="master"></bms-master-card><div id="editor-host" style="margin-top:16px"></div></div>
     <div style="display:flex;flex-direction:column;gap:16px">
+      <bms-badge id="badge"></bms-badge>
+      <div style="background:var(--card-background-color);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px">
+        <bms-temporary-change id="f1"></bms-temporary-change>
+        <bms-profile-select id="f2"></bms-profile-select>
+      </div>
       <bms-status-card id="status"></bms-status-card>
       <bms-modes-card id="modes"></bms-modes-card>
     </div>
@@ -64,6 +72,7 @@
     });
 
     const snapshot = await (await fetch("./snapshot.json")).json();
+    snapshot.settings.hlavni_vypinac = true;
     const listeners = new Set();
     const emit = () => listeners.forEach((cb) => cb(structuredClone(snapshot)));
     const hass = {
@@ -74,14 +83,32 @@
           console.log("ws", msg);
           if (msg.type === "heating_curve/set_setting") { snapshot.settings[msg.key] = msg.value; emit(); return { value: msg.value }; }
           if (msg.type === "heating_curve/export") return { profiles: {} };
+          if (msg.type === "heating_curve/simulate") {
+            const pts = [...(msg.curve ?? snapshot.curve)].sort((a, b) => a.x - b.x);
+            const x = msg.outdoor;
+            let y = pts[0].y;
+            for (let i = 0; i < pts.length - 1; i++) {
+              if (x >= pts[i].x && x <= pts[i + 1].x) y = pts[i].y + (x - pts[i].x) / (pts[i + 1].x - pts[i].x) * (pts[i + 1].y - pts[i].y);
+            }
+            if (x > pts.at(-1).x) y = pts.at(-1).y;
+            const corr = snapshot.result.total_correction;
+            const raw = y + corr;
+            const result = Math.min(snapshot.result.t_max, Math.max(snapshot.result.t_min, raw));
+            return { ...snapshot.result, curve_temp: y, raw, result, clamped: result !== raw };
+          }
           return {};
         },
       },
       callService: async (domain, service, data) => {
         console.log("service", domain, service, data);
-        if (service === "load_profile") snapshot.active_profile = data.name;
-        if (service === "set_curve_points") snapshot.curve = data.points;
+        if (service === "load_profile") { snapshot.active_profile = data.name; snapshot.profile_modified = false; }
+        if (service === "set_curve_points") { snapshot.curve = data.points; snapshot.profile_modified = true; }
         if (service === "cancel_boost") snapshot.boost = { active: false, effective: 0 };
+        if (service === "activate_boost" || service === "activate_reduction") {
+          const now = Date.now() / 1000;
+          const amount = (data.amount ?? 2) * (service === "activate_reduction" ? -1 : 1);
+          snapshot.boost = { active: true, amount, effective: amount, since: now, hours: data.hours ?? 2, until: now + (data.hours ?? 2) * 3600 };
+        }
         emit();
       },
     };
@@ -90,6 +117,9 @@
       master: { type: "custom:bms-master-card", collapsed: ["log"] },
       status: { type: "custom:bms-status-card", compact: true },
       modes: { type: "custom:bms-modes-card", modes: ["boost", "night"] },
+      badge: { type: "custom:bms-badge" },
+      f1: { type: "custom:bms-temporary-change" },
+      f2: { type: "custom:bms-profile-select" },
     };
     const apply = () => {
       for (const [id, config] of Object.entries(cards)) {
@@ -97,9 +127,29 @@
         el.setConfig(config);
         el.hass = { ...hass };
       }
+      const host = document.getElementById("editor-host");
+      host.innerHTML = "";
+      if (document.getElementById("editor").checked) {
+        const ed = document.createElement("bms-card-editor");
+        ed.hass = { ...hass };
+        ed.setConfig(cards.master);
+        ed.addEventListener("config-changed", (e) => {
+          console.log("config", e.detail.config);
+          cards.master = e.detail.config;
+          document.getElementById("master").setConfig(cards.master);
+          ed.setConfig(cards.master);
+        });
+        host.appendChild(ed);
+      }
     };
     await customElements.whenDefined("bms-master-card");
     apply();
+
+    document.getElementById("preset").onchange = (e) => {
+      cards.master = e.target.value ? { type: "custom:bms-master-card", preset: e.target.value } : { type: "custom:bms-master-card" };
+      apply();
+    };
+    document.getElementById("editor").onchange = apply;
 
     document.getElementById("dark").onchange = (e) => {
       document.body.classList.toggle("dark", e.target.checked); hass.themes = { darkMode: e.target.checked }; apply();

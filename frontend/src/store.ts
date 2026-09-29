@@ -1,6 +1,6 @@
 /** Sdílené spojení na websocket regulátoru — jedno předplatné pro všechny karty na stránce. */
 
-import type { HomeAssistant, SettingValue, Snapshot } from "./types.js";
+import type { CalcResult, CurvePoint, HomeAssistant, SettingValue, Snapshot } from "./types.js";
 
 type Listener = (snapshot: Snapshot | undefined, error?: string) => void;
 
@@ -92,5 +92,12 @@ export class BmsStore {
 
   importData(data: Record<string, unknown>): Promise<{ profiles: string[] }> {
     return this.requireHass().connection.sendMessagePromise({ type: `${DOMAIN}/import`, data, ...this.base });
+  }
+
+  /** Výsledek pro jinou venkovní teplotu (a případně neuloženou křivku) — nic se nezapisuje. */
+  simulate(outdoor: number, curve?: CurvePoint[]): Promise<CalcResult> {
+    return this.requireHass().connection.sendMessagePromise({
+      type: `${DOMAIN}/simulate`, outdoor, ...(curve ? { curve } : {}), ...this.base,
+    });
   }
 }

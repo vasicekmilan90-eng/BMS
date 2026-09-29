@@ -1,83 +1,93 @@
 import { html, nothing, css } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
 
-import { BmsSection, notify } from "../components.js";
+import { BmsSection, notify, type MenuItem } from "../components.js";
+import type { SectionOptions } from "../config.js";
 import { baseStyles } from "../styles.js";
 
-@customElement("bms-sec-quick-profiles")
-export class BmsQuickProfilesSection extends BmsSection {
-  static styles = [baseStyles, css`
-    .presets { display: flex; flex-wrap: wrap; gap: 8px; }
-    .presets button.btn { min-width: 96px; justify-content: center; }
-  `];
-
-  protected render() {
-    const { snap, canAct } = this.ctx;
-    const starred = (snap.starred.length ? snap.starred : snap.system_profiles).filter((n) => snap.profiles.includes(n));
-    if (!starred.length) return html`<div class="empty">${this.t("quick.empty")}</div>`;
-    return html`<div class="presets" role="group" aria-label=${this.t("section.quick_profiles")}>
-      ${starred.map((name) => {
-        const active = snap.active_profile === name;
-        return html`<button class="btn ${active ? "active" : ""}" aria-pressed=${active} ?disabled=${!canAct}
-          @click=${() => this.run(() => this.ctx.store.callService("load_profile", { name }),
-            this.t("profiles.loaded", { name }))}>
-          <ha-icon icon=${active ? "mdi:check" : "mdi:bookmark-outline"}></ha-icon>${name}</button>`;
-      })}
-    </div>`;
-  }
-}
+import "./schedules.js";
 
 type DialogMode = "save_as" | "rename";
+type Tab = SectionOptions["profiles"]["tabs"][number];
+type Action = SectionOptions["profiles"]["allow"][number];
 
 @customElement("bms-sec-profiles")
-export class BmsProfilesSection extends BmsSection {
+export class BmsProfilesSection extends BmsSection<SectionOptions["profiles"]> {
   static styles = [baseStyles, css`
-    .picker { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
-    .picker select { flex: 1; min-width: 160px; }
+    .top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-height: 40px; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { display: flex; align-items: center; gap: 6px; min-height: 48px; }
+    li + li { border-top: 1px solid var(--bms-border); }
+    li .name { flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    li .name .badge { margin-left: 6px; }
+    .star { color: var(--bms-muted); }
+    .star[aria-pressed="true"] { color: var(--bms-warn); }
+    .placeholder { width: 40px; flex-shrink: 0; }
+    .modified .links { display: flex; flex-wrap: wrap; gap: 0 12px; margin-top: 2px; }
   `];
 
-  @state() private selected?: string;
+  @state() private tab?: Tab;
   @state() private dialogMode?: DialogMode;
+  @state() private dialogFor = "";
   @state() private dialogName = "";
-  @query("dialog") private dialog!: HTMLDialogElement;
+  @query("dialog.name") private dialog!: HTMLDialogElement;
   @query("input[type=file]") private fileInput!: HTMLInputElement;
 
-  private get current(): string {
-    const { profiles, active_profile } = this.snap;
-    return this.selected && profiles.includes(this.selected) ? this.selected : active_profile;
+  private allowed(action: Action): boolean {
+    if (!this.options.allow.includes(action)) return false;
+    return action === "load" ? this.ctx.canAct : this.ctx.editable;
   }
 
-  private get isDefault(): boolean {
-    return this.current === this.snap.profiles[0];
+  private isDefault(name: string): boolean {
+    return name === this.snap.profiles[0];
   }
 
-  private openDialog(mode: DialogMode): void {
+  private openDialog(mode: DialogMode, name = ""): void {
     this.dialogMode = mode;
-    this.dialogName = mode === "rename" ? this.current : "";
+    this.dialogFor = name;
+    this.dialogName = mode === "rename" ? name : "";
     this.updateComplete.then(() => this.dialog.showModal());
   }
 
   private async submitDialog(e: Event): Promise<void> {
     e.preventDefault();
+    const t = this.t;
     const name = this.dialogName.trim();
     if (!name) return;
-    if (this.snap.profiles.includes(name) && !confirm(this.t("profiles.confirm_overwrite", { name }))) return;
+    if (this.snap.profiles.includes(name) && name !== this.dialogFor
+      && !(await this.confirm(t("profiles.confirm_overwrite", { name }), undefined, t("profiles.overwrite")))) return;
     const store = this.ctx.store;
     const ok = await this.run(async () => {
-      if (this.dialogMode === "rename") {
-        await store.callService("rename_profile", { name: this.current, new_name: name });
-      } else {
-        await store.callService("save_profile", { name });
-      }
-    }, this.t("profiles.saved", { name }));
-    if (ok) {
-      this.selected = name;
-      this.dialog.close();
+      if (this.dialogMode === "rename") await store.callService("rename_profile", { name: this.dialogFor, new_name: name });
+      else await store.callService("save_profile", { name });
+    }, t("profiles.saved", { name }));
+    if (ok) this.dialog.close();
+  }
+
+  private load(name: string): void {
+    this.run(() => this.ctx.store.callService("load_profile", { name }), this.t("profiles.loaded", { name }));
+  }
+
+  private save(name: string): void {
+    this.run(() => this.ctx.store.callService("save_profile", { name }), this.t("profiles.saved", { name }));
+  }
+
+  private async overwrite(name: string): Promise<void> {
+    const t = this.t;
+    if (await this.confirm(t("profiles.confirm_overwrite", { name }), t("profiles.confirm_overwrite_text"), t("profiles.overwrite"))) {
+      this.save(name);
     }
   }
 
-  private toggleStar(): void {
-    const name = this.current;
+  private async removeProfile(name: string): Promise<void> {
+    const t = this.t;
+    const text = this.snap.system_profiles.includes(name) ? t("profiles.confirm_delete_system") : undefined;
+    if (await this.confirm(t("profiles.confirm_delete", { name }), text, t("profiles.delete"), true)) {
+      this.run(() => this.ctx.store.callService("delete_profile", { name }), t("profiles.deleted", { name }));
+    }
+  }
+
+  private toggleStar(name: string): void {
     const starred = this.snap.starred.includes(name)
       ? this.snap.starred.filter((n) => n !== name)
       : [...this.snap.starred, name];
@@ -109,58 +119,103 @@ export class BmsProfilesSection extends BmsSection {
     }
   }
 
-  protected render() {
-    const { snap, editable, canAct } = this.ctx;
+  private rowMenu(name: string): MenuItem[] {
     const t = this.t;
-    const name = this.current;
-    const starred = snap.starred.includes(name);
+    const locked = this.isDefault(name);
+    const starred = this.snap.starred.includes(name);
+    const items: MenuItem[] = [];
+    if (this.allowed("save") && !locked) items.push({ icon: "mdi:content-save-outline", label: t("profiles.save"), action: () => this.overwrite(name) });
+    if (this.allowed("rename") && !locked) items.push({ icon: "mdi:rename", label: t("profiles.rename"), action: () => this.openDialog("rename", name) });
+    if (this.allowed("star")) {
+      items.push({
+        icon: starred ? "mdi:star-off-outline" : "mdi:star-outline", label: t(starred ? "profiles.unstar" : "profiles.star_add"),
+        action: () => this.toggleStar(name),
+      });
+    }
+    if (this.allowed("delete") && !locked) {
+      items.push({ icon: "mdi:delete-outline", label: t("profiles.delete"), action: () => this.removeProfile(name), danger: true, divider: true });
+    }
+    return items;
+  }
+
+  private headMenu(): MenuItem[] {
+    const t = this.t;
+    const items: MenuItem[] = [];
+    if (this.allowed("save")) items.push({ icon: "mdi:content-save-plus-outline", label: t("profiles.save_as"), action: () => this.openDialog("save_as") });
+    if (this.allowed("transfer")) {
+      items.push(
+        { icon: "mdi:export", label: t("profiles.export"), action: () => this.exportProfiles(), divider: items.length > 0 },
+        { icon: "mdi:import", label: t("profiles.import"), action: () => this.fileInput.click() },
+      );
+    }
+    return items;
+  }
+
+  private renderManage() {
+    const { snap } = this.ctx;
+    const t = this.t;
+    const active = snap.active_profile;
     return html`
-      <div class="picker">
-        <label class="visually-hidden" for="profile">${t("profiles.select")}</label>
-        <select id="profile" .value=${name} @change=${(e: Event) => (this.selected = (e.target as HTMLSelectElement).value)}>
-          ${snap.profiles.map((p) => html`<option value=${p} ?selected=${p === name}>
-            ${p}${p === snap.active_profile ? ` (${t("profiles.active")})` : ""}</option>`)}
-        </select>
-        <button class="btn primary" ?disabled=${!canAct || name === snap.active_profile}
-          @click=${() => this.run(() => this.ctx.store.callService("load_profile", { name }), t("profiles.loaded", { name }))}>
-          ${t("profiles.load")}</button>
-      </div>
-      ${editable ? html`
-        <div class="actions">
-          <button class="btn" ?disabled=${this.isDefault}
-            @click=${() => confirm(t("profiles.confirm_overwrite", { name })) &&
-              this.run(() => this.ctx.store.callService("save_profile", { name }), t("profiles.saved", { name }))}>
-            <ha-icon icon="mdi:content-save"></ha-icon>${t("profiles.save")}</button>
-          <button class="btn" @click=${() => this.openDialog("save_as")}>
-            <ha-icon icon="mdi:content-save-plus"></ha-icon>${t("profiles.save_as")}</button>
-          <button class="btn" ?disabled=${this.isDefault} @click=${() => this.openDialog("rename")}>
-            <ha-icon icon="mdi:rename"></ha-icon>${t("profiles.rename")}</button>
-          <button class="btn" aria-pressed=${starred} @click=${() => this.toggleStar()}>
-            <ha-icon icon=${starred ? "mdi:star" : "mdi:star-outline"}></ha-icon>${t("profiles.star")}</button>
-          <button class="btn danger" ?disabled=${this.isDefault}
-            @click=${() => confirm(t(snap.system_profiles.includes(name) ? "profiles.confirm_delete_system" : "profiles.confirm_delete", { name })) &&
-              this.run(() => this.ctx.store.callService("delete_profile", { name }), t("profiles.deleted", { name }))}>
-            <ha-icon icon="mdi:delete"></ha-icon>${t("profiles.delete")}</button>
-          <span style="flex:1"></span>
-          <button class="btn" @click=${() => this.exportProfiles()}><ha-icon icon="mdi:export"></ha-icon>${t("profiles.export")}</button>
-          <button class="btn" @click=${() => this.fileInput.click()}><ha-icon icon="mdi:import"></ha-icon>${t("profiles.import")}</button>
-          <input type="file" accept="application/json,.json" hidden
-            @change=${(e: Event) => this.importProfiles((e.target as HTMLInputElement).files?.[0])} />
-        </div>
-        <dialog @close=${() => (this.dialogMode = undefined)}>
-          <form @submit=${(e: Event) => this.submitDialog(e)}>
-            <h3>${this.dialogMode ? t(`profiles.${this.dialogMode}`) : ""}</h3>
-            <div class="field">
-              <label for="pname">${t("profiles.name")}</label>
-              <input id="pname" required maxlength="60" .value=${this.dialogName}
-                @input=${(e: Event) => (this.dialogName = (e.target as HTMLInputElement).value)} />
-            </div>
-            <div class="actions">
-              <button type="button" class="btn" @click=${() => this.dialog.close()}>${t("common.cancel")}</button>
-              <button type="submit" class="btn primary">${t("common.save")}</button>
-            </div>
-          </form>
-        </dialog>` : nothing}
-    `;
+      ${snap.profile_modified ? html`<div class="alert warning modified" role="status">
+        <ha-icon icon="mdi:pencil-circle-outline"></ha-icon>
+        <span>${t("profiles.modified", { name: active })}
+          <span class="links">
+            ${this.allowed("save") && !this.isDefault(active)
+              ? html`<button class="link" @click=${() => this.save(active)}>${t("profiles.save_to", { name: active })}</button>` : nothing}
+            ${this.allowed("save") ? html`<button class="link" @click=${() => this.openDialog("save_as")}>${t("profiles.save_as")}</button>` : nothing}
+            ${this.allowed("load") ? html`<button class="link" @click=${() => this.load(active)}>${t("profiles.revert")}</button>` : nothing}
+          </span></span>
+      </div>` : nothing}
+      <ul aria-label=${t("section.profiles")}>
+        ${snap.profiles.map((name) => {
+          const isActive = name === active;
+          const starred = snap.starred.includes(name);
+          const menu = this.rowMenu(name);
+          return html`<li>
+            ${this.allowed("star") ? html`<button class="icon-btn star" aria-pressed=${starred}
+              aria-label=${t("profiles.star")} title=${t("profiles.star_hint")} @click=${() => this.toggleStar(name)}>
+              <ha-icon icon=${starred ? "mdi:star" : "mdi:star-outline"}></ha-icon></button>` : nothing}
+            <span class="name">${name}${isActive ? html`<span class="badge">${t("profiles.active")}</span>` : nothing}</span>
+            ${!isActive && this.allowed("load") ? html`<button class="btn" @click=${() => this.load(name)}>${t("profiles.load")}</button>` : nothing}
+            ${menu.length ? html`<bms-menu .items=${menu} label=${t("common.more")}></bms-menu>`
+              : this.options.allow.length > 1 ? html`<span class="placeholder"></span>` : nothing}
+          </li>`;
+        })}
+      </ul>
+      <dialog class="name" @close=${() => (this.dialogMode = undefined)}>
+        <form @submit=${(e: Event) => this.submitDialog(e)}>
+          <h3>${this.dialogMode ? t(`profiles.${this.dialogMode}`) : ""}</h3>
+          <div class="field">
+            <label for="pname">${t("profiles.name")}</label>
+            <input id="pname" required maxlength="60" .value=${this.dialogName}
+              @input=${(e: Event) => (this.dialogName = (e.target as HTMLInputElement).value)} />
+          </div>
+          <div class="actions">
+            <button type="button" class="btn text" @click=${() => this.dialog.close()}>${t("common.cancel")}</button>
+            <button type="submit" class="btn text">${t("common.save")}</button>
+          </div>
+        </form>
+      </dialog>`;
+  }
+
+  protected render() {
+    const tabs = this.options.tabs;
+    if (!tabs.length) return nothing;
+    const tab = this.tab && tabs.includes(this.tab) ? this.tab : tabs[0];
+    const headMenu = tab === "manage" ? this.headMenu() : [];
+    return html`
+      ${tabs.length > 1 || headMenu.length ? html`<div class="top">
+        ${tabs.length > 1 ? html`<div class="seg" role="tablist">
+          ${tabs.map((id) => html`<button role="tab" aria-selected=${id === tab} @click=${() => (this.tab = id)}>
+            ${this.t(`profiles.tab.${id}`)}</button>`)}
+        </div>` : nothing}
+        <span class="spacer"></span>
+        ${headMenu.length ? html`<bms-menu .items=${headMenu} label=${this.t("common.more")}></bms-menu>` : nothing}
+      </div>` : nothing}
+      <input type="file" accept="application/json,.json" hidden
+        @change=${(e: Event) => this.importProfiles((e.target as HTMLInputElement).files?.[0])} />
+      <div role=${tabs.length > 1 ? "tabpanel" : nothing}>
+        ${tab === "manage" ? this.renderManage() : html`<bms-sec-schedules .ctx=${this.ctx}></bms-sec-schedules>`}
+      </div>`;
   }
 }

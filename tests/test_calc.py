@@ -35,6 +35,36 @@ def test_sun_correction() -> None:
     assert calc.sun_correction(-1, 180, 140, 220, -2, 0) == 0
 
 
+def test_facade_factor_follows_sun_all_year() -> None:
+    # jižní okna: zimní polední slunce nízko → skoro plný účinek, letní vysoko → menší
+    assert calc.facade_factor(17, 180, 180) == pytest.approx(0.956, abs=0.01)
+    assert calc.facade_factor(63, 180, 180) == pytest.approx(0.454, abs=0.01)
+    assert calc.facade_factor(30, 90, 180) == pytest.approx(0, abs=1e-9)  # slunce z boku
+    assert calc.facade_factor(5, 180, 180) == pytest.approx(0.498, abs=0.01)  # u obzoru slabé
+    assert calc.facade_factor(-2, 180, 180) == 0
+
+
+def test_daylight_factor_relative_to_noon() -> None:
+    # v poledne 1 v zimě i v létě, bez nastavování okna
+    assert calc.daylight_factor(17, 17) == pytest.approx(1)
+    assert calc.daylight_factor(63, 63) == pytest.approx(1)
+    assert calc.daylight_factor(8.5, 17) == pytest.approx(0.506, abs=0.01)
+    assert calc.daylight_factor(0, 17) == 0
+    assert calc.daylight_factor(10, None) == 0
+
+
+def test_compute_sun_modes() -> None:
+    base = {"sun_elevation": 17.0, "sun_azimuth": 180.0, "clouds": 50.0, "sun_noon_elevation": 17.0}
+    window = calc.compute(_inp(**base))
+    assert window.corr_sun == pytest.approx(-2 * (17 / 30) * 0.5)
+    daylight = calc.compute(_inp(**base, settings={"slunce_rezim": "nad_obzorem"}))
+    assert daylight.corr_sun == pytest.approx(-1.0) and daylight.sun_factor == pytest.approx(1)
+    facade = calc.compute(_inp(**base, settings={"slunce_rezim": "fasada", "slunce_orientace": 270}))
+    assert facade.corr_sun == 0
+    off = calc.compute(_inp(**base, settings={"vliv_slunce": False, "slunce_rezim": "nad_obzorem"}))
+    assert off.corr_sun == 0 and off.sun_factor == pytest.approx(1)
+
+
 @pytest.mark.parametrize(("hour", "start", "end", "night"), [
     (5, 6, 22, True), (6, 6, 22, False), (21, 6, 22, False), (22, 6, 22, True),
     (23, 22, 6, False), (7, 22, 6, True),

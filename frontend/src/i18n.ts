@@ -28,7 +28,9 @@ export function createTranslator(language: string | undefined): Translator {
 
 export function formatNumber(value: number | null | undefined, language: string, digits = 1): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
-  return new Intl.NumberFormat(language, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+  // typografické minus místo spojovníku (−5 °C)
+  return new Intl.NumberFormat(language, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value)
+    .replace(/^-/, "−");
 }
 
 export function formatSigned(value: number | null | undefined, language: string, digits = 1): string {

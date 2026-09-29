@@ -35,6 +35,37 @@
       "reconfigure_successful": "Re-configuration was successful."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Control settings",
+        "description": "The same values are available as device entities and in the card. Curve profiles are not changed.",
+        "data": {
+          "limit_min": "Thermostat limit: minimum",
+          "limit_max": "Thermostat limit: maximum",
+          "safe_temp": "Safe outdoor temperature",
+          "safe_curve_temp": "Heating when the outdoor temperature is unavailable",
+          "prepocet_rezim": "When to set the thermostat",
+          "prepocet_interval": "Recalculation interval",
+          "prepocet_delta": "Outdoor temperature change for recalculation",
+          "pouziti_predpovedi": "Curve and sun from forecast",
+          "predpoved_hodin": "Temperature forecast horizon"
+        }
+      }
+    },
+    "abort": {
+      "not_loaded": "The integration is not loaded, settings cannot be changed."
+    }
+  },
+  "selector": {
+    "prepocet_rezim": {
+      "options": {
+        "cas": "On interval",
+        "teplota": "On outdoor temperature change",
+        "oboji": "Interval and temperature change"
+      }
+    }
+  },
   "exceptions": {
     "not_loaded": {
       "message": "The BMS controller integration is not loaded."
@@ -99,6 +130,7 @@
       "oblacnost_max_eff": { "name": "Clouds: Max correction" },
       "solarni_start": { "name": "Solar window: Start" },
       "solarni_konec": { "name": "Solar window: End" },
+      "slunce_orientace": { "name": "Sun: Window direction" },
       "slunce_max_eff": { "name": "Sun: Max correction" },
       "prepocet_interval": { "name": "Recalculation: Interval" },
       "prepocet_delta": { "name": "Recalculation: Temperature change" },
@@ -130,6 +162,14 @@
           "cas": "By time",
           "teplota": "By temperature change",
           "oboji": "Time and temperature"
+        }
+      },
+      "slunce_rezim": {
+        "name": "Sun: Mode",
+        "state": {
+          "okno": "Fixed azimuth window",
+          "fasada": "By window direction",
+          "nad_obzorem": "Whole day above horizon"
         }
       }
     },

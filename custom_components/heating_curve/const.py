@@ -50,6 +50,12 @@ TEMP_SOURCE_SENSOR  = "sensor"
 TEMP_SOURCE_WEATHER = "weather"
 TEMP_SOURCE_SAFE    = "safe_fallback"
 
+# ── Vliv slunce ────────────────────────────────────────────────────────────────────
+SUN_MODE_WINDOW   = "okno"         # pevné rozpětí azimutu (původní chování)
+SUN_MODE_FACADE   = "fasada"       # směr oken — účinek podle úhlu dopadu
+SUN_MODE_DAYLIGHT = "nad_obzorem"  # celý den, vztaženo k dnešnímu poledni
+SUN_MODES = [SUN_MODE_WINDOW, SUN_MODE_FACADE, SUN_MODE_DAYLIGHT]
+
 # ── Vlivy počasí: klíč nastavení → (klíč měřené veličiny, výchozí od/do/max) ───
 INFLUENCES: dict[str, dict] = {
     "vitr":      {"value": "wind",     "from": 10, "to": 60, "max": 5.0, "unit": "km/h"},

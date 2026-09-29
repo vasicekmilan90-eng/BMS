@@ -27,30 +27,79 @@ Najdete je v *Přidat kartu* pod názvem „BMS …“. Všechny mají vizuáln�
 
 | Karta | Obsah |
 |---|---|
-| `custom:bms-master-card` | celý regulátor, sekce lze zapínat, řadit a sbalovat |
-| `custom:bms-status-card` | výsledná teplota, korekce, upozornění |
-| `custom:bms-modes-card` | boost, útlum, protimraz, noční mód, letní bypass |
+| `custom:bms-master-card` | celý regulátor — předvolby, sekce a jejich volby |
+| `custom:bms-status-card` | výsledná teplota, hodnota na termostatu, proč právě tahle teplota, upozornění |
+| `custom:bms-actions-card` | Přitopit / Ubrat (jiná hodnota podržením, +1 hodina) a rychlé profily |
+| `custom:bms-automations-card` | protimraz, noční útlum, letní bypass |
 | `custom:bms-profiles-card` | rychlé profily, správa profilů, časové plány |
-| `custom:bms-curve-card` | graf a editor topné křivky |
-| `custom:bms-influences-card` | graf a nastavení vlivů počasí a slunce |
+| `custom:bms-curve-card` | graf a editor topné křivky, simulace „co kdyby“ |
+| `custom:bms-influences-card` | vlivy počasí a slunce s grafem |
 | `custom:bms-log-card` | výpočetní log |
-| `custom:bms-settings-card` | limity, bezpečný bod, předpověď, přepočet |
+| `custom:bms-settings-card` | limity, výpadek venkovní teploty, výchozí boost, předpověď, přepočet |
 
-Volby (všechny nepovinné):
+Dále integrace přidává **odznak** `custom:bms-badge` (teplota a stav regulace) a **funkce dlaždic**
+pro entity regulátoru: `custom:bms-temporary-change` (boost/útlum) a `custom:bms-profile-select`
+(rychlé profily) — v editoru dlaždice je najdete pod *Funkce*.
+
+### Konfigurace
+
+Nejrychlejší je zvolit v editoru **předvolbu**: *Rodina* (stav, rychlé akce, automatiky),
+*Technik* (vše), *Mobil* (kompaktní stav a akce), *Přehled* (jen pro čtení). Pak lze sekce
+zapínat, řadit a každé nastavit vlastní volby. V YAML lze předvolbu použít i přímo (`preset: family`).
 
 ```yaml
 type: custom:bms-master-card
 title: Kotel
-sections: [status, modes, quick_profiles, curve]   # pořadí = pořadí zobrazení
-modes: [boost, reduction, night]                   # režimy v sekci „Režimy“
-collapsed: [log, settings]                         # sekce sbalené po načtení
-compact: false                                     # jen podstatné údaje
-curve_editor: true                                 # tabulka bodů křivky
-read_only: false                                   # karta nic nemění
-admin_only_settings: true                          # správu vidí jen administrátoři
+layout: auto              # auto (2 sloupce na široké kartě) | single | columns
+compact: false
+read_only: false          # karta nic nemění
+admin_only_settings: true # profily, plány a nastavení jen pro administrátory
+sections:
+  - type: status
+    show: [result, thermostat, breakdown, facts, next, alerts, main_switch, refresh]   # + trend
+  - type: actions
+    show: [temporary, profiles]
+    directions: [boost, reduction]
+    durations: [1, 2, 4]  # délky nabízené u „Jiné hodnoty“
+    profiles: []          # prázdné = profily s hvězdičkou
+  - type: profiles
+    tabs: [manage, schedules]
+    allow: [load, save, rename, delete, star, transfer]
+    collapsed: true
+  - type: automations
+    items: [frost, night, bypass]
+    controls: full        # status = jen stav a vypínač, full = i „Upravit“
+  - type: curve
+    series: [result, limits, current]   # + modified, safe_point
+    editor: full          # none | shift | points | full (úpravy za tlačítkem „Upravit křivku“)
+    simulate: true
+    range: [-20, 20]      # osa venkovní teploty (jinak podle nastavení regulátoru)
+  - type: influences
+    items: [vitr, srazky, vlhkost, oblacnost, slunce]
+    chart: true           # odkaz „Graf 24 h“
+    controls: full        # values | full
+  - type: log
+    limit: 20
+    filter: all           # all | writes
+    collapsed: true
+  - type: settings
+    groups: [limits, fallback, temporary, forecast, recalc]
+    collapsed: true
 ```
 
-Sekce: `status`, `modes`, `quick_profiles`, `profiles`, `schedules`, `curve`, `influences`, `log`, `settings`.
+Každá sekce může mít navíc `collapsed`, `admin_only`, `column` (1 = levý, 2 = pravý sloupec; jinak vlevo
+ovládání a vpravo křivka, vlivy, log a nastavení) a `visibility`
+se stejnými podmínkami jako dashboardy HA (`state`, `numeric_state`, `screen`, `user`, `and`, `or`):
+
+```yaml
+  - type: settings
+    visibility:
+      - condition: screen
+        media_query: "(min-width: 768px)"
+```
+
+Sekce lze zapsat i jen názvem (`- curve`). Zápis z verze 0.2 (`modes`, `quick_profiles`,
+`schedules`, `collapsed: [...]`, `curve_editor`) se převede automaticky.
 
 ## Regulace
 
@@ -59,8 +108,18 @@ Sekce: `status`, `modes`, `quick_profiles`, `profiles`, `schedules`, `curve`, `i
 - **Termostat** se nastavuje s ohledem na jeho krok a rozsah (`target_temp_step`, `min_temp`, `max_temp`),
   jen když se hodnota liší a termostat není vypnutý.
 - **Předpověď** se stahuje jednou a sdílí; každý vliv má vlastní výhled v hodinách.
+- **Slunce** (`select.bms_slunce_rezim`) má tři způsoby výpočtu:
+  - *Pevné okno* — účinek jen mezi dvěma azimuty (původní chování). Východ a západ slunce se během roku
+    posouvají, okno ne, takže v zimě a v létě pokrývá jinou část dne; karta ukazuje, kolik procent
+    slunečné doby okno pokrývá v zimě, dnes a v létě.
+  - *Směr oken* — zadáte, kam okna míří (`number.bms_slunce_orientace`, 180° = jih). Účinek odpovídá
+    úhlu, pod kterým slunce do oken svítí, a sedí po celý rok bez přenastavení.
+  - *Celý den* — slunce se počítá po celou dobu nad obzorem, vztaženo k dnešní polední výšce
+    (0 při východu a západu, plný účinek v poledne v zimě i v létě).
 - **Plány** přepnou profil jen při změně splněného pravidla — ruční volba profilu má přednost.
 - **Problémy** hlásí `binary_sensor.bms_problem`, chybějící entity se objeví v *Opravách*.
+- **Možnosti** integrace (*Nastavení → Zařízení a služby → BMS → Konfigurovat*) nastaví limity,
+  výpadek venkovní teploty, přepočet a předpověď i bez karty.
 
 ## Vývoj
 
