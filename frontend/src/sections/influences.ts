@@ -228,7 +228,7 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     const useFc = this.on("pouziti_predpovedi");
     const when = useFc ? t("influences.in_hours", { hours: this.num("slunce_predpoved_hodin") }) : t("influences.now");
     const where = factor > 0 ? t(`sun.in.${mode}`, { pct: Math.round(factor * 100) }) : t(`sun.out.${mode}`);
-    return this.row("slunce", "mdi:weather-sunny", t("influences.sun"), `${where} · ${when}`);
+    return this.row("slunce", "mdi:weather-sunny", t("influences.sun"), `${t(`sun.mode.${mode}`)} · ${where} · ${when}`);
   }
 
   private get sunMode(): SunMode {
@@ -369,7 +369,8 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     const t = this.t;
     const el = this as unknown as Element;
     const items = this.options.items;
-    const active = items.filter((id) => this.isActive(id) || this.open.has(id));
+    // Slunce zůstává vidět i bez účinku (noc) — jinak by jeho nastavení nebylo k nalezení.
+    const active = items.filter((id) => this.isActive(id) || this.open.has(id) || (id === "slunce" && this.on("vliv_slunce")));
     const rest = items.filter((id) => !active.includes(id));
     const chartAllowed = this.options.chart && !config.compact;
     return html`
