@@ -54,6 +54,7 @@ OPTION_KEYS = (
     "limit_min", "limit_max", "safe_temp", "safe_curve_temp",
     "prepocet_rezim", "prepocet_interval", "prepocet_delta",
     "pouziti_predpovedi", "predpoved_hodin",
+    "slunce_rezim", "slunce_orientace",
 )
 
 

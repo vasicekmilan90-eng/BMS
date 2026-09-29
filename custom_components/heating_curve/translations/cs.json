@@ -49,7 +49,13 @@
           "prepocet_interval": "Interval přepočtu",
           "prepocet_delta": "Změna venkovní teploty pro přepočet",
           "pouziti_predpovedi": "Křivka a slunce z předpovědi",
-          "predpoved_hodin": "Výhled předpovědi teploty"
+          "predpoved_hodin": "Výhled předpovědi teploty",
+          "slunce_rezim": "Vliv slunce: způsob výpočtu",
+          "slunce_orientace": "Vliv slunce: kam míří okna (azimut)"
+        },
+        "data_description": {
+          "slunce_rezim": "Pevné okno = jen mezi azimuty solárního okna (během roku se vůči východu a západu slunce posouvá). Směr oken = podle úhlu dopadu na okna. Celý den = po celou dobu nad obzorem, vztaženo k dnešnímu poledni.",
+          "slunce_orientace": "Použije se v režimu Směr oken: 90° = východ, 180° = jih, 270° = západ."
         }
       }
     },
@@ -63,6 +69,13 @@
         "cas": "Podle intervalu",
         "teplota": "Při změně venkovní teploty",
         "oboji": "Interval i změna teploty"
+      }
+    },
+    "slunce_rezim": {
+      "options": {
+        "okno": "Pevné okno azimutu",
+        "fasada": "Podle směru oken",
+        "nad_obzorem": "Celý den nad obzorem"
       }
     }
   },

@@ -78,8 +78,11 @@ async def test_options_flow(hass: HomeAssistant, setup_integration: MockConfigEn
         "limit_min": 28, "limit_max": 50, "safe_temp": -2, "safe_curve_temp": 38,
         "prepocet_rezim": "oboji", "prepocet_interval": 15, "prepocet_delta": 1,
         "pouziti_predpovedi": True, "predpoved_hodin": 6,
+        "slunce_rezim": "fasada", "slunce_orientace": 200,
     })
     assert result["type"] is FlowResultType.CREATE_ENTRY
     reg = _reg(setup_integration)
     assert reg.settings["limit_max"] == 50 and reg.settings["prepocet_rezim"] == "oboji"
+    assert reg.settings["slunce_rezim"] == "fasada" and reg.settings["slunce_orientace"] == 200
+    assert hass.states.get("select.bms_slunce_rezim").state == "fasada"
     assert hass.states.get("number.bms_limit_max").state == "50.0"

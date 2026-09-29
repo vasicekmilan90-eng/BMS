@@ -49,7 +49,13 @@
           "prepocet_interval": "Recalculation interval",
           "prepocet_delta": "Outdoor temperature change for recalculation",
           "pouziti_predpovedi": "Curve and sun from forecast",
-          "predpoved_hodin": "Temperature forecast horizon"
+          "predpoved_hodin": "Temperature forecast horizon",
+          "slunce_rezim": "Sun influence: calculation mode",
+          "slunce_orientace": "Sun influence: window direction (azimuth)"
+        },
+        "data_description": {
+          "slunce_rezim": "Fixed window = only between the solar window azimuths (shifts against sunrise and sunset during the year). Window direction = by the angle of incidence on the windows. Whole day = the whole time above the horizon, relative to today's noon.",
+          "slunce_orientace": "Used in the Window direction mode: 90° = east, 180° = south, 270° = west."
         }
       }
     },
@@ -63,6 +69,13 @@
         "cas": "On interval",
         "teplota": "On outdoor temperature change",
         "oboji": "Interval and temperature change"
+      }
+    },
+    "slunce_rezim": {
+      "options": {
+        "okno": "Fixed azimuth window",
+        "fasada": "By window direction",
+        "nad_obzorem": "Whole day above horizon"
       }
     }
   },
