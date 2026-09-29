@@ -11,29 +11,38 @@ import {
 import { baseStyles } from "../styles.js";
 import type { CalcResult, CurvePoint } from "../types.js";
 
-const DRAG_RADIUS = 14;
+const DRAG_RADIUS = 16;
 
 @customElement("bms-sec-curve")
 export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
   static styles = [baseStyles, css`
-    .chart { position: relative; height: 240px; }
+    .chart { position: relative; height: 230px; }
     .chart.drag canvas { touch-action: none; cursor: grab; }
     .chart.dragging canvas { cursor: grabbing; }
-    .tools { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 10px; }
-    .tool { display: inline-flex; align-items: center; gap: 4px; font-size: var(--ha-font-size-s, 13px); }
-    .tool .muted { margin-right: 4px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: var(--ha-font-size-s, 13px); }
+    .legend { display: flex; gap: 6px 14px; font-size: var(--ha-font-size-xs, 12px); color: var(--bms-muted); margin: 4px 0 2px; flex-wrap: wrap; }
+    .legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+    .legend i.band { height: 8px; opacity: 0.35; }
+    .toolbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 6px 8px; border-radius: 12px; background: var(--bms-surface); margin-bottom: 8px; }
+    .toolbar .lbl { font-size: var(--ha-font-size-xs, 12px); color: var(--bms-muted); margin: 0 2px 0 6px; }
+    .toolbar button.btn { background: var(--card-background-color, #fff); min-height: 36px; padding: 0 12px; }
+    .toolbar .icon-btn[aria-pressed="true"] { color: var(--primary-color); }
+    .edit-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: var(--ha-font-size-s, 13px); }
     th, td { padding: 4px 6px; text-align: left; }
     th { color: var(--bms-muted); font-weight: 500; }
-    td input { width: 80px; }
-    .sim { margin-top: 12px; padding: 8px 10px; border-radius: 8px; border: 1px dashed var(--bms-border); }
-    .sim .row { min-height: 32px; }
-    .sim input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--primary-color); }
-    .sim .res { font-size: var(--ha-font-size-s, 13px); }
+    td input { width: 88px; }
+    .sim { display: flex; align-items: center; gap: 10px; font-size: var(--ha-font-size-s, 13px); padding: 8px 12px;
+      border-radius: 12px; background: var(--bms-surface); margin-top: 10px; flex-wrap: wrap; }
+    .sim input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--primary-color); min-height: 0; padding: 0; border: none; background: none; }
+    .sim .res { flex-basis: 100%; }
     .sim .res b { font-weight: 600; }
+    .footer { margin-top: 10px; }
   `];
 
   @state() private draft?: CurvePoint[];
+  @state() private editing = false;
+  @state() private tableOpen = false;
+  @state() private simOpen = false;
   @state() private simOutdoor?: number;
   @state() private simResult?: CalcResult;
   @state() private dragging = false;
@@ -44,6 +53,7 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
   private dragIndex = -1;
   private simTimer?: number;
   private simSeq = 0;
+  private limits: [number, number] = [0, 100];
 
   private get points(): CurvePoint[] {
     return this.draft ?? sortPoints(this.snap.curve);
@@ -54,7 +64,11 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
   }
 
   private get canDrag(): boolean {
-    return this.canEdit && (this.options.editor === "points" || this.options.editor === "full");
+    return this.editing && (this.options.editor === "points" || this.options.editor === "full");
+  }
+
+  private get dirty(): boolean {
+    return this.draft !== undefined && !pointsEqual(sortPoints(this.draft), sortPoints(this.snap.curve));
   }
 
   private get range(): [number, number] {
@@ -88,8 +102,8 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
     const pts = this.points;
     if (pts.length < 2) return;
     const [xMin, xMax] = this.range;
-    const sim = this.simResult && this.simOutdoor !== undefined ? { x: this.simOutdoor, y: this.simResult.result } : null;
-    const key = JSON.stringify([pts, xMin, xMax, r?.total_correction, r?.t_min, r?.t_max, r?.result, sim,
+    const sim = this.simOpen && this.simResult && this.simOutdoor !== undefined ? { x: this.simOutdoor, y: this.simResult.result } : null;
+    const key = JSON.stringify([pts, this.editing, xMin, xMax, r?.total_correction, r?.t_min, r?.t_max, r?.result, sim,
       snap.values.applied_out_temp, snap.settings.safe_temp, snap.settings.safe_curve_temp, this.options.series, lang,
       this.ctx.hass.themes?.darkMode]);
     if (key === this.chartKey && this.chart) return;
@@ -103,6 +117,7 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
     const corr = r?.total_correction ?? 0;
     const tMin = r?.t_min ?? Number(snap.settings.limit_min);
     const tMax = r?.t_max ?? Number(snap.settings.limit_max);
+    this.limits = [tMin, tMax];
     const samples: number[] = [];
     for (let x = Math.floor(xMin); x <= Math.ceil(xMax); x += 1) samples.push(x);
     const base = samples.map((x) => ({ x, y: interpolate(pts, x) }));
@@ -110,43 +125,64 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
     const clamped = modified.map((p) => ({ x: p.x, y: Math.min(tMax, Math.max(tMin, p.y)) }));
 
     const el = this as unknown as Element;
-    const cBase = cssVar(el, "--bms-info", "#039be5");
-    const cMod = cssVar(el, "--bms-heat", "#ff8100");
-    const cRes = cssVar(el, "--bms-ok", "#43a047");
-    const cWarn = cssVar(el, "--bms-warn", "#ffa600");
+    const cBase = cssVar(el, "--bms-cool", "#1e88e5");
+    const cMod = cssVar(el, "--bms-heat", "#ff7a00");
+    const cRes = cssVar(el, "--bms-ok", "#2e9d4f");
+    const cWarn = cssVar(el, "--bms-warn", "#f2a100");
     const cSim = cssVar(el, "--bms-night", "#7e57c2");
     const cText = cssVar(el, "--secondary-text-color", "#888");
     const cGrid = cssVar(el, "--divider-color", "rgba(127,127,127,.2)");
 
     const datasets: Record<string, unknown>[] = [
-      { label: t("curve.base"), data: base, borderColor: cBase, backgroundColor: withAlpha(cBase, 0.08), fill: true, pointRadius: 0, borderWidth: 2 },
-      { label: t("curve.points"), data: pts, type: "scatter", borderColor: cBase, backgroundColor: cBase,
-        pointRadius: this.canDrag ? 6 : 4, pointHoverRadius: this.canDrag ? 8 : 5 },
+      { label: t("curve.base"), data: base, borderColor: cBase, pointRadius: 0, borderWidth: 2.5 },
     ];
+    if (this.editing) {
+      const saved = sortPoints(this.snap.curve);
+      if (this.dirty) {
+        datasets.push({ label: t("curve.saved_curve"), data: samples.map((x) => ({ x, y: interpolate(saved, x) })),
+          borderColor: withAlpha(cText, 0.8), borderDash: [4, 3], pointRadius: 0, borderWidth: 1.5 });
+      }
+      datasets.push({ label: t("curve.points"), data: pts, type: "scatter", borderColor: cBase,
+        backgroundColor: cssVar(el, "--card-background-color", "#fff"), borderWidth: 2.5,
+        pointRadius: this.canDrag ? 7 : 5, pointHoverRadius: this.canDrag ? 9 : 6 });
+    }
     if (this.has("modified")) {
       datasets.push({ label: t("curve.modified"), data: modified, borderColor: cMod, borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 });
     }
-    if (this.has("result")) datasets.push({ label: t("curve.result"), data: clamped, borderColor: cRes, pointRadius: 0, borderWidth: 2 });
-    if (this.has("current") && r && snap.values.applied_out_temp !== null && snap.values.applied_out_temp !== undefined) {
-      datasets.push({ label: t("curve.current"), type: "scatter", pointRadius: 7, pointStyle: "rectRot",
-        data: [{ x: Number(snap.values.applied_out_temp), y: r.result }], borderColor: cRes, backgroundColor: cRes });
+    if (this.has("result") && !this.editing) {
+      datasets.push({ label: t("curve.result"), data: clamped, borderColor: cRes, pointRadius: 0, borderWidth: 2.5 });
+    }
+    if (this.has("current") && r && snap.values.applied_out_temp !== null && snap.values.applied_out_temp !== undefined && !this.editing) {
+      datasets.push({ label: t("curve.current"), type: "scatter", pointRadius: 7, pointBorderWidth: 2,
+        data: [{ x: Number(snap.values.applied_out_temp), y: r.result }], borderColor: cssVar(el, "--card-background-color", "#fff"),
+        backgroundColor: cRes });
     }
     if (this.has("safe_point")) {
       datasets.push({ label: t("curve.safe_point"), type: "scatter", pointRadius: 6, pointStyle: "triangle",
         data: [{ x: Number(snap.settings.safe_temp), y: Number(snap.settings.safe_curve_temp) }], borderColor: cWarn, backgroundColor: cWarn });
     }
     if (sim) {
-      datasets.push({ label: t("curve.simulated"), type: "scatter", pointRadius: 7, pointStyle: "circle",
-        data: [sim], borderColor: cSim, backgroundColor: withAlpha(cSim, 0.4), borderWidth: 2 });
+      datasets.push({ label: t("curve.simulated"), type: "scatter", pointRadius: 7, data: [sim], borderColor: cSim,
+        backgroundColor: withAlpha(cSim, 0.4), borderWidth: 2 });
     }
-    if (this.has("limits")) {
-      datasets.push(
-        { label: t("curve.limits"), data: [{ x: xMin, y: tMax }, { x: xMax, y: tMax }], borderColor: withAlpha(cWarn, 0.7),
-          borderDash: [2, 3], pointRadius: 0, borderWidth: 1 },
-        { label: "", data: [{ x: xMin, y: tMin }, { x: xMax, y: tMin }], borderColor: withAlpha(cWarn, 0.7),
-          borderDash: [2, 3], pointRadius: 0, borderWidth: 1 },
-      );
-    }
+
+    const showLimits = this.has("limits");
+    const bands = {
+      id: "limitBands",
+      beforeDatasetsDraw: (chart: Chart) => {
+        if (!showLimits) return;
+        const { left, right, top, bottom } = chart.chartArea;
+        const y = chart.scales.y;
+        const c = chart.ctx;
+        c.save();
+        c.fillStyle = withAlpha(cWarn, 0.1);
+        const yMax = Math.max(top, Math.min(bottom, y.getPixelForValue(this.limits[1])));
+        const yMin = Math.max(top, Math.min(bottom, y.getPixelForValue(this.limits[0])));
+        c.fillRect(left, top, right - left, yMax - top);
+        c.fillRect(left, yMin, right - left, bottom - yMin);
+        c.restore();
+      },
+    };
 
     if (this.chart) {
       this.chart.data.datasets = datasets as never;
@@ -156,18 +192,19 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
     this.chart = new Chart(this.canvas, {
       type: "line",
       data: { datasets: datasets as never },
+      plugins: [bands],
       options: {
         animation: false,
         maintainAspectRatio: false,
         parsing: false,
         interaction: { mode: "nearest", intersect: false },
         scales: {
-          x: { type: "linear", reverse: true, title: { display: true, text: t("curve.outdoor_axis"), color: cText },
-               ticks: { color: cText }, grid: { color: cGrid } },
-          y: { title: { display: true, text: t("curve.flow_axis"), color: cText }, ticks: { color: cText }, grid: { color: cGrid } },
+          x: { type: "linear", reverse: true, ticks: { color: cText, callback: (v) => `${formatNumber(Number(v), lang, 0)}` },
+               grid: { color: cGrid }, title: { display: true, text: t("curve.outdoor_axis"), color: cText } },
+          y: { ticks: { color: cText }, grid: { color: cGrid } },
         },
         plugins: {
-          legend: { labels: { color: cText, boxWidth: 12, filter: (item) => Boolean(item.text) } },
+          legend: { display: false },
           tooltip: {
             callbacks: {
               label: (item) => `${item.dataset.label}: ${formatNumber((item.raw as CurvePoint).y, lang)} °C`,
@@ -179,16 +216,14 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
     });
   }
 
-  // ── Tažení bodů ────────────────────────────────────────────────────────────
+  // ── Tažení bodů (jen v režimu úprav, jinak se přes graf dá posouvat stránka) ──
   private hitPoint(e: PointerEvent): number {
     const chart = this.chart;
     if (!chart) return -1;
     let best = -1;
     let bestDist = DRAG_RADIUS;
     this.points.forEach((p, i) => {
-      const dx = chart.scales.x.getPixelForValue(p.x) - e.offsetX;
-      const dy = chart.scales.y.getPixelForValue(p.y) - e.offsetY;
-      const dist = Math.hypot(dx, dy);
+      const dist = Math.hypot(chart.scales.x.getPixelForValue(p.x) - e.offsetX, chart.scales.y.getPixelForValue(p.y) - e.offsetY);
       if (dist < bestDist) {
         bestDist = dist;
         best = i;
@@ -218,17 +253,16 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
   }
 
   private onPointerUp(): void {
+    if (this.dragIndex >= 0) this.scheduleSim();
     this.dragIndex = -1;
     this.dragging = false;
-    if (this.simOutdoor !== undefined) this.scheduleSim();
   }
 
   // ── Úpravy ─────────────────────────────────────────────────────────────────
   private edit(index: number, field: "x" | "y", value: string): void {
     const pts = [...this.points];
     pts[index] = { ...pts[index], [field]: Number(value.replace(",", ".")) };
-    this.draft = pts;
-    this.scheduleSim();
+    this.transform(pts);
   }
 
   private transform(pts: CurvePoint[]): void {
@@ -236,15 +270,22 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
     this.scheduleSim();
   }
 
+  private stopEditing(): void {
+    this.editing = false;
+    this.draft = undefined;
+    this.tableOpen = false;
+    this.scheduleSim();
+  }
+
   private async save(): Promise<void> {
     const pts = sortPoints(this.points);
     const ok = await this.run(() => this.ctx.store.callService("set_curve_points", { points: pts }), this.t("curve.saved"));
-    if (ok) this.draft = undefined;
+    if (ok) this.stopEditing();
   }
 
   // ── Co kdyby ───────────────────────────────────────────────────────────────
   private scheduleSim(): void {
-    if (this.simOutdoor === undefined) return;
+    if (!this.simOpen || this.simOutdoor === undefined) return;
     window.clearTimeout(this.simTimer);
     this.simTimer = window.setTimeout(() => this.simulate(), 200);
   }
@@ -262,29 +303,42 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
     }
   }
 
+  private toggleSim(): void {
+    this.simOpen = !this.simOpen;
+    if (this.simOpen) {
+      const [xMin, xMax] = this.range;
+      this.simOutdoor ??= Math.max(xMin, Math.min(xMax, Math.round(Number(this.snap.values.applied_out_temp ?? 0)) - 5));
+      this.scheduleSim();
+    }
+  }
+
   private renderSim() {
     const { lang } = this.ctx;
     const t = this.t;
     const [xMin, xMax] = this.range;
-    const current = Number(this.snap.values.applied_out_temp ?? 0);
-    const value = this.simOutdoor ?? Math.round(current);
+    const value = this.simOutdoor ?? 0;
     const r = this.simResult;
     return html`<div class="sim">
-      <div class="row">
-        <label class="small" for="sim">${t("curve.what_if")}</label>
-        <input id="sim" type="range" min=${xMin} max=${xMax} step="1" .value=${String(value)}
-          @input=${(e: Event) => { this.simOutdoor = Number((e.target as HTMLInputElement).value); this.scheduleSim(); }} />
-        <span class="small" style="min-width:56px;text-align:right">${formatTemp(value, lang, 0)}</span>
-        ${this.simOutdoor !== undefined ? html`<button class="icon-btn" aria-label=${t("curve.what_if_reset")}
-          @click=${() => { this.simOutdoor = undefined; this.simResult = undefined; }}><ha-icon icon="mdi:close"></ha-icon></button>` : nothing}
-      </div>
-      ${r && this.simOutdoor !== undefined ? html`<div class="res" role="status">${t("curve.what_if_result", {
-        out: formatNumber(this.simOutdoor, lang, 0), curve: formatNumber(r.curve_temp, lang),
-        corr: formatSigned(r.total_correction, lang),
-      })} <b>${formatTemp(r.result, lang)}</b>${r.clamped ? html` <span class="chip warn">${t("status.clamped")}</span>` : nothing}
-        ${this.draft ? html` <span class="muted">(${t("curve.what_if_draft")})</span>` : nothing}</div>`
-        : html`<div class="small muted">${t("curve.what_if_hint")}</div>`}
+      <ha-icon icon="mdi:flask-outline" class="muted"></ha-icon>
+      <label for="sim">${t("curve.what_if")}</label>
+      <input id="sim" type="range" min=${xMin} max=${xMax} step="1" .value=${String(value)}
+        @input=${(e: Event) => { this.simOutdoor = Number((e.target as HTMLInputElement).value); this.scheduleSim(); }} />
+      <b>${formatSigned(value, lang, 0).replace(/^\+/, "")} °C</b>
+      <div class="res" role="status">${r ? html`${t("curve.what_if_result")} <b>${formatTemp(r.result, lang)}</b>
+        ${r.clamped ? html` <span class="limit" style="color:var(--bms-warn)">(${t("curve.what_if_clamped")})</span>` : nothing}
+        ${this.dirty ? html` <span class="muted">${t("curve.what_if_draft")}</span>` : nothing}` : html`<span class="muted">…</span>`}</div>
     </div>`;
+  }
+
+  private renderLegend() {
+    const t = this.t;
+    const items: [string, string, boolean][] = [[t("curve.base"), "var(--bms-cool)", false]];
+    if (this.has("result")) items.push([t("curve.result"), "var(--bms-ok)", false]);
+    if (this.has("modified")) items.push([t("curve.modified"), "var(--bms-heat)", false]);
+    if (this.has("safe_point")) items.push([t("curve.safe_point"), "var(--bms-warn)", false]);
+    if (this.has("limits")) items.push([t("curve.out_of_limits"), "var(--bms-warn)", true]);
+    return html`<div class="legend">${items.map(([label, color, band]) =>
+      html`<span><i class=${band ? "band" : ""} style="background:${color}"></i>${label}</span>`)}</div>`;
   }
 
   protected render() {
@@ -292,11 +346,29 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
     const t = this.t;
     const pts = this.points;
     const validity = validatePoints(pts);
-    const dirty = this.draft !== undefined && !pointsEqual(sortPoints(this.draft), sortPoints(this.snap.curve));
     const editor = this.options.editor;
-    const tools = this.canEdit && (editor === "shift" || editor === "full");
-    const table = this.canEdit && (editor === "points" || editor === "full") && !config.compact;
+    const tools = editor === "shift" || editor === "full";
+    const table = (editor === "points" || editor === "full") && !config.compact;
     return html`
+      ${this.editing ? html`<div class="edit-head">
+        <span class="small muted">${this.canDrag ? t("curve.drag_hint") : t("curve.edit_hint")}</span>
+        <span class="spacer"></span>
+        ${this.dirty ? html`<span class="badge warn">${t("curve.unsaved")}</span>` : nothing}
+      </div>
+      ${tools || table ? html`<div class="toolbar">
+        ${tools && validity === "ok" ? html`
+          <span class="lbl">${t("curve.shift")}</span>
+          <button class="btn" aria-label=${t("curve.shift_down")} @click=${() => this.transform(shiftCurve(pts, -0.5))}>${formatSigned(-0.5, lang)}</button>
+          <button class="btn" aria-label=${t("curve.shift_up")} @click=${() => this.transform(shiftCurve(pts, 0.5))}>${formatSigned(0.5, lang)}</button>
+          <span class="lbl" title=${t("curve.slope_hint")}>${t("curve.slope", { value: formatNumber(curveSlope(pts), lang, 2) })}</span>
+          <button class="btn" aria-label=${t("curve.flatter")} @click=${() => this.transform(slopeCurve(pts, 0.95))}>
+            <ha-icon icon="mdi:angle-acute"></ha-icon>${t("curve.flatter_short")}</button>
+          <button class="btn" aria-label=${t("curve.steeper")} @click=${() => this.transform(slopeCurve(pts, 1.05))}>
+            <ha-icon icon="mdi:angle-obtuse"></ha-icon>${t("curve.steeper_short")}</button>` : nothing}
+        <span class="spacer"></span>
+        ${table ? html`<button class="icon-btn" aria-pressed=${this.tableOpen} aria-label=${t("curve.table")} title=${t("curve.table")}
+          @click=${() => (this.tableOpen = !this.tableOpen)}><ha-icon icon="mdi:table"></ha-icon></button>` : nothing}
+      </div>` : nothing}` : nothing}
       <div class="chart ${this.canDrag ? "drag" : ""} ${this.dragging ? "dragging" : ""}"
         @pointerdown=${(e: PointerEvent) => this.onPointerDown(e)}
         @pointermove=${(e: PointerEvent) => this.onPointerMove(e)}
@@ -304,20 +376,8 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
         @pointercancel=${() => this.onPointerUp()}>
         <canvas role="img" aria-label=${t("curve.chart_label")}></canvas>
       </div>
-      ${this.canDrag ? html`<div class="small muted">${t("curve.drag_hint")}</div>` : nothing}
-      ${tools && validity === "ok" ? html`<div class="tools">
-        <span class="tool"><span class="muted">${t("curve.shift")}</span>
-          <button class="btn" aria-label=${t("curve.shift_down")} @click=${() => this.transform(shiftCurve(pts, -0.5))}>${formatSigned(-0.5, lang)}</button>
-          <button class="btn" aria-label=${t("curve.shift_up")} @click=${() => this.transform(shiftCurve(pts, 0.5))}>${formatSigned(0.5, lang)}</button>
-        </span>
-        <span class="tool"><span class="muted">${t("curve.slope", { value: formatNumber(curveSlope(pts), lang, 2) })}</span>
-          <button class="btn" aria-label=${t("curve.flatter")} @click=${() => this.transform(slopeCurve(pts, 0.95))}>
-            <ha-icon icon="mdi:angle-acute"></ha-icon>${t("curve.flatter_short")}</button>
-          <button class="btn" aria-label=${t("curve.steeper")} @click=${() => this.transform(slopeCurve(pts, 1.05))}>
-            <ha-icon icon="mdi:angle-obtuse"></ha-icon>${t("curve.steeper_short")}</button>
-        </span>
-      </div>` : nothing}
-      ${table ? html`
+      ${this.editing ? nothing : this.renderLegend()}
+      ${this.editing && this.tableOpen ? html`
         <table>
           <thead><tr><th>${t("curve.outdoor_short")} (°C)</th><th>${t("curve.flow_short")} (°C)</th><th></th></tr></thead>
           <tbody>${pts.map((p, i) => html`<tr>
@@ -328,16 +388,22 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
             <td><button class="icon-btn" ?disabled=${pts.length <= 2} aria-label=${t("curve.remove_point")}
               @click=${() => this.transform(pts.filter((_, j) => j !== i))}><ha-icon icon="mdi:close"></ha-icon></button></td>
           </tr>`)}</tbody>
-        </table>` : nothing}
-      ${this.canEdit && validity !== "ok" ? html`<div class="alert error" role="alert">${t(`curve.invalid.${validity}`)}</div>` : nothing}
-      ${this.canEdit && (table || dirty) ? html`<div class="actions" style="margin-top:8px">
-        ${table ? html`<button class="btn" @click=${() => this.transform(sortPoints([...pts, suggestPoint(pts)]))}>
+        </table>
+        <button class="btn text" @click=${() => this.transform(sortPoints([...pts, suggestPoint(pts)]))}>
           <ha-icon icon="mdi:plus"></ha-icon>${t("curve.add_point")}</button>` : nothing}
+      ${this.editing && validity !== "ok" ? html`<div class="alert error" role="alert"><span>${t(`curve.invalid.${validity}`)}</span></div>` : nothing}
+      ${this.simOpen ? this.renderSim() : nothing}
+      <div class="actions footer">
+        ${this.options.simulate ? html`<button class="btn" aria-pressed=${this.simOpen} @click=${() => this.toggleSim()}>
+          <ha-icon icon="mdi:flask-outline"></ha-icon>${t("curve.what_if_button")}</button>` : nothing}
         <span class="spacer"></span>
-        <button class="btn" ?disabled=${!dirty} @click=${() => { this.draft = undefined; this.scheduleSim(); }}>${t("common.discard")}</button>
-        <button class="btn primary" ?disabled=${!dirty || validity !== "ok"} @click=${() => this.save()}>${t("common.save")}</button>
-      </div>` : nothing}
-      ${this.options.simulate ? this.renderSim() : nothing}
+        ${this.editing ? html`
+          <button class="btn text" @click=${() => this.stopEditing()}>${t(this.dirty ? "common.discard" : "common.close")}</button>
+          <button class="btn primary" ?disabled=${!this.dirty || validity !== "ok"} @click=${() => this.save()}>
+            <ha-icon icon="mdi:content-save"></ha-icon>${t("curve.save")}</button>`
+          : this.canEdit ? html`<button class="btn" @click=${() => (this.editing = true)}>
+            <ha-icon icon="mdi:pencil"></ha-icon>${t("curve.edit")}</button>` : nothing}
+      </div>
     `;
   }
 }

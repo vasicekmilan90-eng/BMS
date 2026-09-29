@@ -6,7 +6,7 @@ import asyncio
 import copy
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from astral import sun as astral_sun
@@ -74,6 +74,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 _INVALID_STATES = (None, STATE_UNAVAILABLE, STATE_UNKNOWN)
+SUN_PATH_STEP_MIN = 20
 
 
 def _round(value: float | None, digits: int = 1) -> float | None:
@@ -118,6 +119,7 @@ class BMSRegulator:
         self.safe_since: float | None = None
         self._forecast_ts = 0.0
         self._next_tick: datetime | None = None
+        self._sun_paths_cache: tuple[date, dict[str, Any]] | None = None
         self._last_write_outdoor: float | None = None
         self._listeners: list[CALLBACK_TYPE] = []
         self._unsubs: list[CALLBACK_TYPE] = []
@@ -369,6 +371,42 @@ class BMSRegulator:
         observer = get_astral_observer(self.hass)
         return astral_sun.elevation(observer, when), astral_sun.azimuth(observer, when)
 
+    def _sun_noon_elevation(self, when: datetime) -> float | None:
+        """Nejvyšší elevace slunce v daný den (místní poledne)."""
+        observer = get_astral_observer(self.hass)
+        local = dt_util.as_local(when)
+        try:
+            noon = astral_sun.noon(observer, local.date(), tzinfo=local.tzinfo)
+        except ValueError:
+            return None
+        return astral_sun.elevation(observer, noon)
+
+    def _sun_paths(self) -> dict[str, Any]:
+        """Dráha slunce dnes a o slunovratech (pro graf v kartě), počítá se jednou za den."""
+        today = dt_util.now().date()
+        if self._sun_paths_cache and self._sun_paths_cache[0] == today:
+            return self._sun_paths_cache[1]
+        observer = get_astral_observer(self.hass)
+        tz = dt_util.get_default_time_zone()
+
+        def path(day: date) -> list[list[float]]:
+            start = datetime(day.year, day.month, day.day, tzinfo=tz)
+            points = []
+            for step in range(0, 24 * 60, SUN_PATH_STEP_MIN):
+                when = start + timedelta(minutes=step)
+                elevation = astral_sun.elevation(observer, when)
+                if elevation > 0:
+                    points.append([round(astral_sun.azimuth(observer, when), 1), round(elevation, 1)])
+            return points
+
+        paths = {
+            "today": path(today),
+            "summer": path(date(today.year, 6, 21)),
+            "winter": path(date(today.year, 12, 21)),
+        }
+        self._sun_paths_cache = (today, paths)
+        return paths
+
     # ── Výpočet ───────────────────────────────────────────────────────────────
     async def async_recompute(self, *, write: bool = False, manual: bool = False, reason: str = "") -> bool:
         """Přepočítá výsledek; `write` = nastavit termostat. Vrací True při úspěchu."""
@@ -433,7 +471,8 @@ class BMSRegulator:
             applied[value_key] = fc if s[f"{key}_predpoved"] and fc is not None else actual[value_key]
 
         actual_el, actual_az = self._sun_position(now)
-        fc_el, fc_az = self._sun_position(now + timedelta(hours=float(s["slunce_predpoved_hodin"])))
+        sun_fc_when = now + timedelta(hours=float(s["slunce_predpoved_hodin"]))
+        fc_el, fc_az = self._sun_position(sun_fc_when)
         use_sun_fc = bool(s["pouziti_predpovedi"])
         sun_el, sun_az = (fc_el, fc_az) if use_sun_fc else (actual_el, actual_az)
 
@@ -451,6 +490,7 @@ class BMSRegulator:
             safe_mode=source == TEMP_SOURCE_SAFE,
             curve=self.curve_points,
             settings=s,
+            sun_noon_elevation=self._sun_noon_elevation(sun_fc_when if use_sun_fc else now),
         )
         extra = {
             "source": source,
@@ -495,6 +535,7 @@ class BMSRegulator:
             "corr_humidity": _round(result.corr_humidity, 2),
             "corr_clouds": _round(result.corr_clouds, 2),
             "corr_sun": _round(result.corr_sun, 2),
+            "sun_factor": _round(result.sun_factor, 2),
         }
 
     def _record_history(self, inputs: calc.CalcInput, result: calc.CalcResult) -> None:
@@ -1079,4 +1120,5 @@ class BMSRegulator:
             "history": self.data["history"],
             "forecast": self.chart_forecast(-1, 48),
             "forecast_ok": self.forecast_ok,
+            "sun_paths": self._sun_paths(),
         }

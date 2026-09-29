@@ -47,6 +47,19 @@ async def test_profile_modified_and_snapshot(hass: HomeAssistant, setup_integrat
     assert snap["inputs"]["weather"] == "weather.doma"
     kinds = [e["kind"] for e in snap["next_events"]]
     assert "recalc" in kinds and ("night_start" in kinds or "day_start" in kinds)
+    paths = snap["sun_paths"]
+    assert max(p[1] for p in paths["summer"]) > max(p[1] for p in paths["winter"]) > 0
+    assert "sun_factor" in snap["values"]
+
+
+async def test_sun_mode_select(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
+    reg = _reg(setup_integration)
+    await hass.services.async_call(
+        "select", "select_option", {"entity_id": "select.bms_slunce_rezim", "option": "nad_obzorem"}, blocking=True,
+    )
+    assert reg.settings["slunce_rezim"] == "nad_obzorem"
+    inputs, _ = reg._gather_inputs()
+    assert inputs.sun_noon_elevation is not None and inputs.sun_noon_elevation > 0
 
 
 async def test_boost_records_start_and_duration(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:

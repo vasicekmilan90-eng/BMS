@@ -6,7 +6,7 @@ import { property, state } from "lit/decorators.js";
 import type { CardContext } from "./components.js";
 import { checkConditions, conditionEntities, mediaQueries } from "./conditions.js";
 import {
-  canEdit, estimateRows, normalizeConfig,
+  canEdit, estimateRows, normalizeConfig, sectionColumn,
   type BmsCardConfig, type NormalizedConfig, type NormalizedSection, type SectionId,
 } from "./config.js";
 import { createTranslator } from "./i18n.js";
@@ -31,6 +31,8 @@ const SECTION_ICONS: Record<SectionId, string> = {
 };
 /** Šířka karty, od které se v rozložení `auto` použijí dva sloupce. */
 const COLUMNS_MIN_WIDTH = 900;
+/** Relativní časy („před 5 min“, zbývající čas) se obnovují i bez nových dat. */
+const TICK_MS = 30_000;
 
 function renderSection(s: NormalizedSection, ctx: CardContext): TemplateResult {
   switch (s.type) {
@@ -49,15 +51,17 @@ export class BmsCard extends LitElement {
   static styles = [baseStyles, css`
     ha-card { overflow: hidden; }
     .loading { padding: 16px; }
-    .body.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin-top: -1px; }
-    .body.cols .section { border-top: 1px solid var(--bms-border); }
-    .body.cols .wide { grid-column: 1 / -1; }
-    .body.cols .section:not(.wide) { box-shadow: inset -1px 0 0 var(--bms-border); }
-    summary.section-header { margin: 0; min-height: 28px; }
+    .body.single { display: flex; flex-direction: column; }
+    .body.single > .col { display: contents; }
+    .body.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+    .body.cols > .col + .col { border-left: 1px solid var(--bms-border); }
+    .body .section + .section { border-top: none; }
+    .body .section:not(.first) { border-top: 1px solid var(--bms-border); }
+    summary.section-header { margin: 0; min-height: 32px; }
     details[open] > summary.section-header { margin-bottom: 10px; }
-    .summary { font-weight: 400; font-size: var(--ha-font-size-s, 12px); color: var(--bms-muted);
+    .summary { font-weight: 400; font-size: var(--ha-font-size-s, 13px); color: var(--bms-muted);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; text-align: right; }
-    details[open] .summary { display: none; }
+    .chevron { color: var(--bms-muted); }
     .warnings { padding: 8px 16px; }
   `];
 
@@ -76,7 +80,9 @@ export class BmsCard extends LitElement {
   private attachedTo?: BmsStore;
   private resizeObserver?: ResizeObserver;
   private mediaLists: MediaQueryList[] = [];
+  private tick?: number;
   private readonly onMediaChange = () => this.requestUpdate();
+  private readonly onShowSection = (e: Event) => this.showSection((e as CustomEvent<{ id: SectionId }>).detail.id);
 
   setConfig(config: BmsCardConfig): void {
     const ctor = this.constructor as typeof BmsCard;
@@ -95,6 +101,10 @@ export class BmsCard extends LitElement {
       if (wide !== this.wide) this.wide = wide;
     });
     this.resizeObserver.observe(this);
+    this.addEventListener("bms-show-section", this.onShowSection);
+    this.tick = window.setInterval(() => {
+      if (this.snapshot && document.visibilityState !== "hidden") this.requestUpdate();
+    }, TICK_MS);
   }
 
   disconnectedCallback(): void {
@@ -104,6 +114,17 @@ export class BmsCard extends LitElement {
     this.attachedTo = undefined;
     this.resizeObserver?.disconnect();
     this.unwatchMedia();
+    this.removeEventListener("bms-show-section", this.onShowSection);
+    window.clearInterval(this.tick);
+  }
+
+  /** Otevře sekci (např. z odkazu v upozornění) a posune ji do záběru. */
+  private async showSection(id: SectionId): Promise<void> {
+    const index = this.config?.sections.findIndex((s) => s.type === id) ?? -1;
+    if (index < 0) return;
+    this.open = new Map(this.open).set(index, true);
+    await this.updateComplete;
+    this.renderRoot.querySelector(`[data-section="${index}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   private watchMedia(): void {
@@ -180,30 +201,36 @@ export class BmsCard extends LitElement {
       config, editable: canEdit(config, isAdmin), canAct: !config.read_only,
     };
     const sections = this.visible(config, isAdmin);
-    const cols = this.columns(config, sections.length);
     const now = Date.now() / 1000;
+    const left = sections.filter((s) => sectionColumn(s) === 1);
+    const right = sections.filter((s) => sectionColumn(s) === 2);
+    const cols = this.columns(config, sections.length) && left.length > 0 && right.length > 0;
+    const firsts = new Set(cols ? [left[0], right[0]] : [sections[0]]);
+    const renderOne = (s: NormalizedSection) => {
+      const index = config.sections.indexOf(s);
+      const cls = `section ${firsts.has(s) ? "first" : ""}`;
+      const order = `order:${sections.indexOf(s)}`;
+      if (s.type === "status") return html`<div class=${cls} style=${order} data-section=${index}>${renderSection(s, ctx)}</div>`;
+      const title = html`<ha-icon icon=${SECTION_ICONS[s.type]}></ha-icon><span>${t(`section.${s.type}`)}</span>`;
+      if (sections.length === 1) {
+        return html`<div class=${cls} style=${order} data-section=${index}><div class="section-header">${title}</div>${renderSection(s, ctx)}</div>`;
+      }
+      const isOpen = this.open.get(index) ?? !s.collapsed;
+      return html`<details class=${cls} style=${order} data-section=${index} ?open=${isOpen}
+        @toggle=${(e: Event) => {
+          const next = (e.target as HTMLDetailsElement).open;
+          if (next !== isOpen) this.open = new Map(this.open).set(index, next);
+        }}>
+        <summary class="section-header">${title}
+          ${isOpen ? html`<span class="spacer"></span>` : html`<span class="summary">${sectionSummary(s.type, snap, t, lang, now)}</span>`}
+          <ha-icon class="chevron" icon="mdi:chevron-down"></ha-icon></summary>
+        ${isOpen ? renderSection(s, ctx) : nothing}
+      </details>`;
+    };
+    // Stejná struktura v obou rozloženích — při změně šířky se sekce nepřekreslují a nepřijdou o rozpracovaný stav.
     return html`<ha-card>
-      <div class="body ${cols ? "cols" : ""}">
-        ${sections.map((s) => {
-          const cls = `section ${s.span === 2 ? "wide" : ""}`;
-          if (s.type === "status") return html`<div class=${cls}>${renderSection(s, ctx)}</div>`;
-          const title = html`<ha-icon icon=${SECTION_ICONS[s.type]}></ha-icon><span>${t(`section.${s.type}`)}</span>`;
-          if (sections.length === 1) {
-            return html`<div class=${cls}><div class="section-header">${title}</div>${renderSection(s, ctx)}</div>`;
-          }
-          const index = config.sections.indexOf(s);
-          const isOpen = this.open.get(index) ?? !s.collapsed;
-          return html`<details class=${cls} ?open=${isOpen}
-            @toggle=${(e: Event) => {
-              const next = (e.target as HTMLDetailsElement).open;
-              if (next !== isOpen) this.open = new Map(this.open).set(index, next);
-            }}>
-            <summary class="section-header">${title}
-              ${isOpen ? html`<span class="spacer"></span>` : html`<span class="summary">${sectionSummary(s.type, snap, t, lang, now)}</span>`}
-              <ha-icon class="chevron" icon="mdi:chevron-right"></ha-icon></summary>
-            ${isOpen ? renderSection(s, ctx) : nothing}
-          </details>`;
-        })}
+      <div class="body ${cols ? "cols" : "single"}">
+        <div class="col">${left.map(renderOne)}</div><div class="col">${right.map(renderOne)}</div>
       </div>
       ${config.warnings.length && isAdmin ? html`<div class="warnings small muted">
         ${t("card.config_warnings", { list: config.warnings.join(", ") })}</div>` : nothing}

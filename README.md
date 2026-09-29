@@ -28,8 +28,8 @@ Najdete je v *Přidat kartu* pod názvem „BMS …“. Všechny mají vizuáln�
 | Karta | Obsah |
 |---|---|
 | `custom:bms-master-card` | celý regulátor — předvolby, sekce a jejich volby |
-| `custom:bms-status-card` | výsledná teplota, hodnota na termostatu, rozpad výpočtu, průběh 24 h, upozornění |
-| `custom:bms-actions-card` | boost / útlum (částka, délka, prodloužení) a rychlé profily |
+| `custom:bms-status-card` | výsledná teplota, hodnota na termostatu, proč právě tahle teplota, upozornění |
+| `custom:bms-actions-card` | Přitopit / Ubrat (jiná hodnota podržením, +1 hodina) a rychlé profily |
 | `custom:bms-automations-card` | protimraz, noční útlum, letní bypass |
 | `custom:bms-profiles-card` | rychlé profily, správa profilů, časové plány |
 | `custom:bms-curve-card` | graf a editor topné křivky, simulace „co kdyby“ |
@@ -56,26 +56,27 @@ read_only: false          # karta nic nemění
 admin_only_settings: true # profily, plány a nastavení jen pro administrátory
 sections:
   - type: status
-    show: [result, thermostat, breakdown, facts, trend, next, alerts, main_switch, refresh]
+    show: [result, thermostat, breakdown, facts, next, alerts, main_switch, refresh]   # + trend
   - type: actions
     show: [temporary, profiles]
     directions: [boost, reduction]
-    durations: [1, 2, 4]  # nabízené délky v hodinách
+    durations: [1, 2, 4]  # délky nabízené u „Jiné hodnoty“
     profiles: []          # prázdné = profily s hvězdičkou
   - type: profiles
     tabs: [manage, schedules]
     allow: [load, save, rename, delete, star, transfer]
+    collapsed: true
   - type: automations
     items: [frost, night, bypass]
-    controls: full        # status | full
+    controls: full        # status = jen stav a vypínač, full = i „Upravit“
   - type: curve
-    series: [modified, result, limits, safe_point, current]
-    editor: full          # none | shift | points | full
+    series: [result, limits, current]   # + modified, safe_point
+    editor: full          # none | shift | points | full (úpravy za tlačítkem „Upravit křivku“)
     simulate: true
     range: [-20, 20]      # osa venkovní teploty (jinak podle nastavení regulátoru)
   - type: influences
     items: [vitr, srazky, vlhkost, oblacnost, slunce]
-    chart: true
+    chart: true           # odkaz „Graf 24 h“
     controls: full        # values | full
   - type: log
     limit: 20
@@ -86,7 +87,8 @@ sections:
     collapsed: true
 ```
 
-Každá sekce může mít navíc `collapsed`, `admin_only`, `span: 2` (přes oba sloupce) a `visibility`
+Každá sekce může mít navíc `collapsed`, `admin_only`, `column` (1 = levý, 2 = pravý sloupec; jinak vlevo
+ovládání a vpravo křivka, vlivy, log a nastavení) a `visibility`
 se stejnými podmínkami jako dashboardy HA (`state`, `numeric_state`, `screen`, `user`, `and`, `or`):
 
 ```yaml
@@ -106,6 +108,14 @@ Sekce lze zapsat i jen názvem (`- curve`). Zápis z verze 0.2 (`modes`, `quick_
 - **Termostat** se nastavuje s ohledem na jeho krok a rozsah (`target_temp_step`, `min_temp`, `max_temp`),
   jen když se hodnota liší a termostat není vypnutý.
 - **Předpověď** se stahuje jednou a sdílí; každý vliv má vlastní výhled v hodinách.
+- **Slunce** (`select.bms_slunce_rezim`) má tři způsoby výpočtu:
+  - *Pevné okno* — účinek jen mezi dvěma azimuty (původní chování). Východ a západ slunce se během roku
+    posouvají, okno ne, takže v zimě a v létě pokrývá jinou část dne; karta ukazuje, kolik procent
+    slunečné doby okno pokrývá v zimě, dnes a v létě.
+  - *Směr oken* — zadáte, kam okna míří (`number.bms_slunce_orientace`, 180° = jih). Účinek odpovídá
+    úhlu, pod kterým slunce do oken svítí, a sedí po celý rok bez přenastavení.
+  - *Celý den* — slunce se počítá po celou dobu nad obzorem, vztaženo k dnešní polední výšce
+    (0 při východu a západu, plný účinek v poledne v zimě i v létě).
 - **Plány** přepnou profil jen při změně splněného pravidla — ruční volba profilu má přednost.
 - **Problémy** hlásí `binary_sensor.bms_problem`, chybějící entity se objeví v *Opravách*.
 - **Možnosti** integrace (*Nastavení → Zařízení a služby → BMS → Konfigurovat*) nastaví limity,

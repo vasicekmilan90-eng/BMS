@@ -56,7 +56,8 @@ export interface SectionOptions {
 export interface SectionCommon {
   collapsed: boolean;
   admin_only: boolean;
-  span: 1 | 2;
+  /** Sloupec ve dvousloupcovém rozložení; 0 = podle druhu sekce. */
+  column: 0 | 1 | 2;
   visibility: Condition[];
 }
 
@@ -94,17 +95,23 @@ export interface NormalizedConfig {
 }
 
 export const SECTION_DEFAULTS: { [K in SectionId]: SectionOptions[K] } = {
-  status: { show: [...STATUS_ITEMS] },
+  status: { show: STATUS_ITEMS.filter((i) => i !== "trend") },
   actions: { show: ["temporary", "profiles"], directions: [...DIRECTIONS], durations: [1, 2, 4], profiles: [] },
   profiles: { tabs: [...PROFILE_TABS], allow: [...PROFILE_ACTIONS] },
   automations: { items: [...AUTOMATIONS], controls: "full" },
-  curve: { series: [...CURVE_SERIES], editor: "full", simulate: true },
+  curve: { series: ["result", "limits", "current"], editor: "full", simulate: true },
   influences: { items: [...INFLUENCE_ITEMS], chart: true, controls: "full" },
   log: { limit: 20, filter: "all" },
   settings: { groups: [...SETTINGS_GROUPS] },
 };
 
-const DEFAULT_COLLAPSED: readonly SectionId[] = ["log", "settings"];
+const DEFAULT_COLLAPSED: readonly SectionId[] = ["profiles", "log", "settings"];
+/** Ve dvou sloupcích: vlevo ovládání, vpravo „jak to počítá“. */
+const LEFT_COLUMN: readonly SectionId[] = ["status", "actions", "automations", "profiles"];
+
+export function sectionColumn(section: { type: SectionId; column: 0 | 1 | 2 }): 1 | 2 {
+  return section.column || (LEFT_COLUMN.includes(section.type) ? 1 : 2);
+}
 /** Sekce, které mění nastavení — ve výchozím stavu jen pro administrátory. */
 export const ADMIN_SECTIONS: readonly SectionId[] = ["profiles", "settings"];
 
@@ -112,7 +119,7 @@ export const PRESET_CONFIGS: Record<Preset, Partial<BmsCardConfig>> = {
   family: {
     layout: "single",
     sections: [
-      { type: "status", show: ["result", "thermostat", "breakdown", "alerts", "next"] },
+      { type: "status", show: ["result", "thermostat", "breakdown", "alerts", "next", "main_switch"] },
       "actions",
       { type: "automations", controls: "status" },
     ],
@@ -208,12 +215,12 @@ export function makeSection(
   const collapsed = typeof raw.collapsed === "boolean"
     ? raw.collapsed
     : legacyCollapsed ? legacyCollapsed.has(type) : DEFAULT_COLLAPSED.includes(type);
-  const span = raw.span === 2 ? 2 : 1;
+  const column = raw.column === 1 || raw.column === 2 ? raw.column : 0;
   return {
     type,
     collapsed: type === "status" ? false : collapsed,
     admin_only: typeof raw.admin_only === "boolean" ? raw.admin_only : adminOnlySettings && ADMIN_SECTIONS.includes(type),
-    span,
+    column,
     visibility: Array.isArray(raw.visibility) ? (raw.visibility as Condition[]) : [],
     ...normalizeOptions(type, raw),
   } as NormalizedSection;

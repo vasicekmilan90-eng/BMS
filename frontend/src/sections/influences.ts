@@ -5,6 +5,7 @@ import { Chart, cssVar } from "../chart.js";
 import { BmsSection } from "../components.js";
 import type { SectionOptions } from "../config.js";
 import { formatNumber, formatSigned, formatTime } from "../i18n.js";
+import { SUN_MODES, sunCoverage, type SunMode } from "../logic.js";
 import { baseStyles } from "../styles.js";
 import type { ChartPoint } from "../types.js";
 
@@ -19,37 +20,45 @@ const WEATHER: Record<WeatherId, { value: string; icon: string; unit: string; co
 };
 
 const SERIES: { key: keyof ChartPoint; axis: string; color: string; fallback: string }[] = [
-  { key: "out", axis: "yTemp", color: "--bms-err", fallback: "#db4437" },
-  { key: "result", axis: "yTemp", color: "--bms-ok", fallback: "#43a047" },
-  { key: "act_wind", axis: "yWind", color: "--bms-info", fallback: "#039be5" },
+  { key: "out", axis: "yTemp", color: "--bms-err", fallback: "#d93025" },
+  { key: "result", axis: "yTemp", color: "--bms-ok", fallback: "#2e9d4f" },
+  { key: "act_wind", axis: "yWind", color: "--bms-cool", fallback: "#1e88e5" },
   { key: "act_rain", axis: "yRain", color: "--bms-frost", fallback: "#00bcd4" },
   { key: "act_hum", axis: "yPct", color: "--bms-night", fallback: "#7e57c2" },
   { key: "act_clouds", axis: "yPct", color: "--bms-muted", fallback: "#888" },
 ];
 
+/** Diagram: azimut 45–315° (V–J–Z), elevace 0–70°. */
+const AZ0 = 45;
+const AZ1 = 315;
+const EL_MAX = 70;
+const W = 300;
+const H = 110;
+const ax = (az: number) => ((Math.min(AZ1, Math.max(AZ0, az)) - AZ0) / (AZ1 - AZ0)) * W;
+const ay = (el: number) => H - (Math.max(0, Math.min(EL_MAX, el)) / EL_MAX) * (H - 6);
+
 @customElement("bms-sec-influences")
 export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"]> {
   static styles = [baseStyles, css`
-    .chart { position: relative; height: 200px; margin-bottom: 6px; }
-    .series { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .chart { position: relative; height: 190px; margin-bottom: 6px; }
+    .series { margin-bottom: 8px; }
     .series i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
-    .item { padding: 6px 0; }
-    .item + .item { border-top: 1px solid var(--bms-border); }
-    .head { display: flex; align-items: center; gap: 10px; min-height: 40px; }
-    .head > ha-icon { --mdc-icon-size: 22px; color: var(--bms-muted); }
-    .head.on > ha-icon { color: var(--primary-color); }
-    .text { flex: 1; min-width: 0; }
-    .name { font-weight: 500; }
-    .desc { font-size: var(--ha-font-size-s, 12px); color: var(--bms-muted); }
-    .effect { font-weight: 600; min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
-    .effect.zero { color: var(--bms-muted); font-weight: 400; }
-    .details { padding: 4px 0 8px 32px; }
-    .details .grid { --bms-col: 200px; }
-    .ramp { width: 100%; max-width: 280px; height: 60px; display: block; margin: 4px 0; }
-    .sun svg { width: 100%; max-height: 110px; }
+    .effect { font-variant-numeric: tabular-nums; font-weight: 500; min-width: 64px; text-align: right; }
+    .effect.plus { color: var(--bms-heat); } .effect.minus { color: var(--bms-cool); } .effect.zero { color: var(--bms-muted); font-weight: 400; }
+    .more { display: flex; gap: 8px; align-items: center; min-height: 44px; font-size: var(--ha-font-size-s, 13px); color: var(--bms-muted); }
+    .more button.link { color: var(--bms-muted); font-weight: 400; }
+    .ramp { width: 100%; max-width: 300px; height: 60px; display: block; margin: 4px 0; }
+    .sun svg.diagram { width: 100%; max-width: 420px; display: block; margin: 6px 0 2px; }
+    .axis { display: flex; justify-content: space-between; max-width: 420px; font-size: 10px; color: var(--bms-muted); }
+    .hint { font-size: var(--ha-font-size-s, 12px); color: var(--bms-muted); margin: 6px 0; }
+    .coverage { font-size: var(--ha-font-size-s, 12px); margin: 6px 0; }
+    .coverage.warn { color: var(--bms-warn); }
+    .dgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 16px; }
   `];
 
   @state() private open = new Set<ItemId>();
+  @state() private moreOpen = false;
+  @state() private chartOpen = false;
   @state() private shown = new Set<keyof ChartPoint>(["out", "result"]);
   @query("canvas") private canvas?: HTMLCanvasElement;
   private chart?: Chart;
@@ -58,6 +67,10 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    this.destroyChart();
+  }
+
+  private destroyChart(): void {
     this.chart?.destroy();
     this.chart = undefined;
     this.chartKey = "";
@@ -65,6 +78,7 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
 
   protected updated(changed: PropertyValues<this>): void {
     super.updated(changed);
+    if (!this.canvas && this.chart) this.destroyChart();
     this.renderChart();
   }
 
@@ -85,8 +99,7 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     this.chartKey = key;
     const optionsKey = `${lang}|${this.ctx.hass.themes?.darkMode}`;
     if (optionsKey !== this.optionsKey) {
-      this.chart?.destroy();
-      this.chart = undefined;
+      this.destroyChart();
       this.optionsKey = optionsKey;
     }
     const now = Date.now();
@@ -158,18 +171,69 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     });
   }
 
-  private toggleSeries(key: keyof ChartPoint): void {
-    const next = new Set(this.shown);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    this.shown = next;
+  private toggle<T>(set: Set<T>, value: T): Set<T> {
+    const next = new Set(set);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    return next;
   }
 
-  private toggleOpen(id: ItemId): void {
-    const next = new Set(this.open);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    this.open = next;
+  private effectOf(id: ItemId): number {
+    const v = this.snap.values;
+    return Number((id === "slunce" ? v.corr_sun : v[WEATHER[id].corr]) ?? 0);
+  }
+
+  private isActive(id: ItemId): boolean {
+    return this.on(`vliv_${id}`) && Math.abs(this.effectOf(id)) >= 0.05;
+  }
+
+  private effect(value: number) {
+    const cls = Math.abs(value) < 0.05 ? "zero" : value > 0 ? "plus" : "minus";
+    return html`<span class="effect ${cls}">${formatSigned(value, this.ctx.lang)} °C</span>`;
+  }
+
+  private row(id: ItemId, icon: string, name: string, desc: string) {
+    const { editable } = this.ctx;
+    const t = this.t;
+    const enabled = this.on(`vliv_${id}`);
+    const full = this.options.controls === "full" && editable;
+    const open = this.open.has(id);
+    return html`<div class="item">
+      <span class="ico ${enabled ? "on" : ""}"><ha-icon icon=${icon}></ha-icon></span>
+      <div class="txt"><div class="name">${name}</div><div class="desc">${desc}</div></div>
+      ${this.effect(this.effectOf(id))}
+      ${full ? html`<button class="icon-btn" aria-expanded=${open} aria-label=${t("influences.edit")} title=${t("influences.edit")}
+        @click=${() => (this.open = this.toggle(this.open, id))}><ha-icon icon=${open ? "mdi:chevron-up" : "mdi:tune-variant"}></ha-icon></button>` : nothing}
+      <ha-switch .checked=${enabled} ?disabled=${!editable} aria-label=${name}
+        @change=${(e: Event) => this.setSetting(`vliv_${id}`, (e.target as HTMLInputElement).checked, name)}></ha-switch>
+    </div>
+    ${open && full ? (id === "slunce" ? this.sunDetails() : this.weatherDetails(id)) : nothing}`;
+  }
+
+  private weatherRow(id: WeatherId) {
+    const { snap, lang } = this.ctx;
+    const t = this.t;
+    const inf = WEATHER[id];
+    const useFc = this.on(`${id}_predpoved`);
+    const used = snap.values[`${useFc ? "forecast" : "actual"}_${inf.value}`];
+    const when = useFc ? t("influences.in_hours", { hours: this.num(`${id}_predpoved_hodin`) }) : t("influences.now");
+    return this.row(id, inf.icon, t(`influences.${id}`), `${formatNumber(used, lang)} ${inf.unit} · ${when}`);
+  }
+
+  private sunRow() {
+    const { snap } = this.ctx;
+    const t = this.t;
+    const mode = this.sunMode;
+    const factor = Number(snap.result?.sun_factor ?? snap.values.sun_factor ?? 0);
+    const useFc = this.on("pouziti_predpovedi");
+    const when = useFc ? t("influences.in_hours", { hours: this.num("slunce_predpoved_hodin") }) : t("influences.now");
+    const where = factor > 0 ? t(`sun.in.${mode}`, { pct: Math.round(factor * 100) }) : t(`sun.out.${mode}`);
+    return this.row("slunce", "mdi:weather-sunny", t("influences.sun"), `${where} · ${when}`);
+  }
+
+  private get sunMode(): SunMode {
+    const mode = String(this.snap.settings.slunce_rezim ?? "okno");
+    return (SUN_MODES as readonly string[]).includes(mode) ? (mode as SunMode) : "okno";
   }
 
   /** Průběh korekce: 0 pod „od“, lineárně do „max“ na „do“. */
@@ -198,128 +262,136 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     </svg>`;
   }
 
-  private weatherItem(id: WeatherId) {
-    const { snap, lang, editable } = this.ctx;
+  private weatherDetails(id: WeatherId) {
+    const { snap, lang } = this.ctx;
     const t = this.t;
     const inf = WEATHER[id];
-    const enabled = this.on(`vliv_${id}`);
     const useFc = this.on(`${id}_predpoved`);
     const used = snap.values[`${useFc ? "forecast" : "actual"}_${inf.value}`];
-    const effect = Number(snap.values[inf.corr] ?? 0);
-    const open = this.open.has(id);
-    const full = this.options.controls === "full" && editable;
-    return html`<div class="item">
-      <div class="head ${enabled ? "on" : ""}">
-        <ha-icon icon=${inf.icon}></ha-icon>
-        <div class="text">
-          <div class="name">${t(`influences.${id}`)}</div>
-          <div class="desc">${formatNumber(used, lang)} ${inf.unit}
-            ${useFc ? t("influences.in_hours", { hours: this.num(`${id}_predpoved_hodin`) }) : t("influences.now")}</div>
+    return html`<div class="item-details">
+      ${this.ramp(id, inf.unit, used)}
+      <div class="small muted">${t("influences.values", {
+        now: formatNumber(snap.values[`actual_${inf.value}`], lang), fc: formatNumber(snap.values[`forecast_${inf.value}`], lang), unit: inf.unit,
+      })}</div>
+      <div class="dgrid">
+        <div>
+          <bms-toggle .ctx=${this.ctx} key="${id}_predpoved" label=${t("influences.use_forecast")}></bms-toggle>
+          <bms-number .ctx=${this.ctx} key="${id}_predpoved_hodin" label=${t("influences.horizon")}></bms-number>
         </div>
-        <span class="effect ${Math.abs(effect) < 0.05 ? "zero" : ""}">${formatSigned(effect, lang)} °C</span>
-        ${full ? html`<button class="icon-btn" aria-expanded=${open} aria-label=${t("influences.edit")}
-          @click=${() => this.toggleOpen(id)}><ha-icon icon=${open ? "mdi:chevron-up" : "mdi:tune-variant"}></ha-icon></button>` : nothing}
-        <ha-switch .checked=${enabled} ?disabled=${!editable} aria-label=${t(`influences.${id}`)}
-          @change=${(e: Event) => this.setSetting(`vliv_${id}`, (e.target as HTMLInputElement).checked, t(`influences.${id}`))}></ha-switch>
+        <div>
+          <bms-number .ctx=${this.ctx} key="${id}_od" label=${t("influences.from")}></bms-number>
+          <bms-number .ctx=${this.ctx} key="${id}_do" label=${t("influences.to")}></bms-number>
+          <bms-number .ctx=${this.ctx} key="${id}_max_eff" label=${t("influences.max")}></bms-number>
+        </div>
       </div>
-      ${open && full ? html`<div class="details">
-        ${this.ramp(id, inf.unit, used)}
-        <div class="small muted">${t("influences.values", {
-          now: formatNumber(snap.values[`actual_${inf.value}`], lang), fc: formatNumber(snap.values[`forecast_${inf.value}`], lang), unit: inf.unit,
-        })}</div>
-        <div class="grid">
-          <div>
-            <bms-toggle .ctx=${this.ctx} key="${id}_predpoved" label=${t("influences.use_forecast")}></bms-toggle>
-            <bms-number .ctx=${this.ctx} key="${id}_predpoved_hodin" label=${t("influences.horizon")}></bms-number>
-          </div>
-          <div>
-            <bms-number .ctx=${this.ctx} key="${id}_od" label=${t("influences.from")}></bms-number>
-            <bms-number .ctx=${this.ctx} key="${id}_do" label=${t("influences.to")}></bms-number>
-            <bms-number .ctx=${this.ctx} key="${id}_max_eff" label=${t("influences.max")}></bms-number>
-          </div>
-        </div>
-      </div>` : nothing}
     </div>`;
   }
 
-  /** Solární okno a poloha slunce (azimut 0–360°, elevace 0–90°). */
-  private sunDiagram() {
+  /** Dráha slunce dnes a o slunovratech + oblast, kde slunce počítáme. */
+  private sunDiagram(mode: SunMode) {
     const { snap } = this.ctx;
-    const y = (el: number) => 90 - Math.max(0, Math.min(90, el));
+    const t = this.t;
+    const paths = snap.sun_paths;
+    const line = (pts: [number, number][] | undefined) => (pts ?? []).map(([az, el]) => `${ax(az).toFixed(1)},${ay(el).toFixed(1)}`).join(" ");
+    const orient = this.num("slunce_orientace");
     const start = this.num("solarni_start");
     const end = this.num("solarni_konec");
-    const now = [snap.values.actual_sun_azimuth, snap.values.actual_sun_elevation];
-    const fc = [snap.values.forecast_sun_azimuth, snap.values.forecast_sun_elevation];
-    return svg`<svg viewBox="0 0 360 100" role="img" aria-label=${this.t("influences.sun_diagram")}>
-      <rect x=${start} y="0" width=${Math.max(0, end - start)} height="90" fill="var(--bms-warn)" opacity="0.12"></rect>
-      <line x1="0" y1="90" x2="360" y2="90" stroke="var(--bms-border)"></line>
-      ${[90, 180, 270].map((a) => svg`<line x1=${a} y1="86" x2=${a} y2="94" stroke="var(--bms-border)"></line>`)}
-      ${fc[0] !== null && fc[0] !== undefined && fc[1] !== null && fc[1] !== undefined
-        ? svg`<circle cx=${Number(fc[0])} cy=${y(Number(fc[1]))} r="5" fill="none" stroke="var(--bms-warn)" stroke-dasharray="2 2"></circle>`
-        : nothing}
-      ${now[0] !== null && now[0] !== undefined && now[1] !== null && now[1] !== undefined
-        ? svg`<circle cx=${Number(now[0])} cy=${y(Number(now[1]))} r="6" fill="var(--bms-warn)"></circle>`
-        : nothing}
-    </svg>`;
+    const v = snap.values;
+    const sunAz = v.sun_azimuth;
+    const sunEl = v.sun_elevation;
+    return svg`<svg class="diagram" viewBox="0 0 ${W} ${H + 2}" role="img" aria-label=${t("sun.diagram")}>
+      <defs>
+        <linearGradient id="facade" x1="0" x2="1">
+          <stop offset="0" stop-color="var(--bms-warn)" stop-opacity="0"></stop>
+          <stop offset="0.5" stop-color="var(--bms-warn)" stop-opacity="0.3"></stop>
+          <stop offset="1" stop-color="var(--bms-warn)" stop-opacity="0"></stop>
+        </linearGradient>
+      </defs>
+      ${mode === "okno" ? svg`<rect x=${ax(start)} y="0" width=${Math.max(0, ax(end) - ax(start))} height=${H} fill="var(--bms-warn)" opacity="0.18"></rect>` : nothing}
+      ${mode === "fasada" ? svg`
+        <rect x=${ax(orient - 90)} y="0" width=${Math.max(0, ax(orient + 90) - ax(orient - 90))} height=${H} fill="url(#facade)"></rect>
+        <line x1=${ax(orient)} x2=${ax(orient)} y1="0" y2=${H} stroke="var(--bms-warn)" stroke-width="1.5" stroke-dasharray="3 3"></line>` : nothing}
+      ${mode === "nad_obzorem" && paths?.today.length ? svg`
+        <polygon points="${ax(paths.today[0][0])},${H} ${line(paths.today)} ${ax(paths.today.at(-1)![0])},${H}" fill="var(--bms-warn)" opacity="0.18"></polygon>` : nothing}
+      <line x1="0" x2=${W} y1=${H} y2=${H} stroke="var(--bms-border)"></line>
+      ${[90, 180, 270].map((a) => svg`<line x1=${ax(a)} x2=${ax(a)} y1="0" y2=${H} stroke="var(--bms-border)" stroke-dasharray="2 4"></line>`)}
+      <polyline points=${line(paths?.summer)} fill="none" stroke="var(--bms-muted)" stroke-width="1" stroke-dasharray="3 3"></polyline>
+      <polyline points=${line(paths?.winter)} fill="none" stroke="var(--bms-muted)" stroke-width="1" stroke-dasharray="3 3"></polyline>
+      <polyline points=${line(paths?.today)} fill="none" stroke="var(--bms-warn)" stroke-width="2"></polyline>
+      ${sunAz !== null && sunAz !== undefined && sunEl !== null && sunEl !== undefined && sunEl > 0
+        ? svg`<circle cx=${ax(sunAz)} cy=${ay(sunEl)} r="6" fill="var(--bms-warn)" stroke="var(--card-background-color, #fff)" stroke-width="2"></circle>` : nothing}
+      ${paths?.summer.length ? svg`<text x=${ax(180) + 4} y=${ay(Math.max(...paths.summer.map((p) => p[1]))) - 3} font-size="9" fill="var(--bms-muted)">${t("sun.summer")}</text>` : nothing}
+      ${paths?.winter.length ? svg`<text x=${ax(180) + 4} y=${ay(Math.max(...paths.winter.map((p) => p[1]))) - 3} font-size="9" fill="var(--bms-muted)">${t("sun.winter")}</text>` : nothing}
+    </svg>
+    <div class="axis"><span>${t("sun.east")}</span><span>${t("sun.south")}</span><span>${t("sun.west")}</span></div>`;
   }
 
-  private sunItem() {
-    const { snap, lang, editable } = this.ctx;
+  private sunDetails() {
     const t = this.t;
-    const v = snap.values;
-    const enabled = this.on("vliv_slunce");
-    const useFc = this.on("pouziti_predpovedi");
-    const effect = Number(v.corr_sun ?? 0);
-    const open = this.open.has("slunce");
-    const full = this.options.controls === "full" && editable;
-    const az = useFc ? v.forecast_sun_azimuth : v.actual_sun_azimuth;
-    const el = useFc ? v.forecast_sun_elevation : v.actual_sun_elevation;
-    return html`<div class="item sun">
-      <div class="head ${enabled ? "on" : ""}">
-        <ha-icon icon="mdi:weather-sunny"></ha-icon>
-        <div class="text">
-          <div class="name">${t("influences.sun")}</div>
-          <div class="desc">${t("influences.sun_position", { az: formatNumber(az, lang, 0), el: formatNumber(el, lang, 0) })}
-            ${useFc ? t("influences.in_hours", { hours: this.num("slunce_predpoved_hodin") }) : t("influences.now")}</div>
-        </div>
-        <span class="effect ${Math.abs(effect) < 0.05 ? "zero" : ""}">${formatSigned(effect, lang)} °C</span>
-        ${full ? html`<button class="icon-btn" aria-expanded=${open} aria-label=${t("influences.edit")}
-          @click=${() => this.toggleOpen("slunce")}><ha-icon icon=${open ? "mdi:chevron-up" : "mdi:tune-variant"}></ha-icon></button>` : nothing}
-        <ha-switch .checked=${enabled} ?disabled=${!editable} aria-label=${t("influences.sun")}
-          @change=${(e: Event) => this.setSetting("vliv_slunce", (e.target as HTMLInputElement).checked, t("influences.sun"))}></ha-switch>
+    const mode = this.sunMode;
+    const paths = this.snap.sun_paths;
+    const coverage = mode === "okno" && paths
+      ? (["winter", "today", "summer"] as const).map((k) => sunCoverage(paths[k], this.num("solarni_start"), this.num("solarni_konec")))
+      : null;
+    const uneven = coverage ? Math.max(...coverage) - Math.min(...coverage) > 0.2 : false;
+    return html`<div class="item-details sun">
+      <div class="seg" role="group" aria-label=${t("sun.mode")}>
+        ${SUN_MODES.map((m) => html`<button aria-pressed=${m === mode} ?disabled=${!this.ctx.editable}
+          @click=${() => m !== mode && this.setSetting("slunce_rezim", m, t("sun.mode"))}>${t(`sun.mode.${m}`)}</button>`)}
       </div>
-      ${open && full ? html`<div class="details">
-        ${this.sunDiagram()}
-        <div class="grid">
-          <div>
-            <bms-toggle .ctx=${this.ctx} key="pouziti_predpovedi" label=${t("influences.use_forecast_sun")}></bms-toggle>
-            <bms-number .ctx=${this.ctx} key="slunce_predpoved_hodin" label=${t("influences.horizon")}></bms-number>
-          </div>
-          <div>
+      <div class="hint">${t(`sun.hint.${mode}`)}</div>
+      ${this.sunDiagram(mode)}
+      ${coverage ? html`<div class="coverage ${uneven ? "warn" : ""}">${t("sun.coverage", {
+        winter: Math.round(coverage[0] * 100), today: Math.round(coverage[1] * 100), summer: Math.round(coverage[2] * 100),
+      })}${uneven ? html` ${t("sun.coverage_tip")}` : nothing}</div>` : nothing}
+      <div class="dgrid">
+        <div>
+          ${mode === "okno" ? html`
             <bms-number .ctx=${this.ctx} key="solarni_start" label=${t("setting.solarni_start")}></bms-number>
-            <bms-number .ctx=${this.ctx} key="solarni_konec" label=${t("setting.solarni_konec")}></bms-number>
-            <bms-number .ctx=${this.ctx} key="slunce_max_eff" label=${t("influences.max")}></bms-number>
-          </div>
+            <bms-number .ctx=${this.ctx} key="solarni_konec" label=${t("setting.solarni_konec")}></bms-number>` : nothing}
+          ${mode === "fasada" ? html`<bms-number .ctx=${this.ctx} key="slunce_orientace" label=${t("setting.slunce_orientace")}></bms-number>` : nothing}
+          <bms-number .ctx=${this.ctx} key="slunce_max_eff" label=${t("influences.max")}></bms-number>
         </div>
-      </div>` : nothing}
+        <div>
+          <bms-toggle .ctx=${this.ctx} key="pouziti_predpovedi" label=${t("influences.use_forecast_sun")}></bms-toggle>
+          <bms-number .ctx=${this.ctx} key="slunce_predpoved_hodin" label=${t("influences.horizon")}></bms-number>
+        </div>
+      </div>
     </div>`;
+  }
+
+  private rowFor(id: ItemId) {
+    return id === "slunce" ? this.sunRow() : this.weatherRow(id);
   }
 
   protected render() {
     const { config, snap } = this.ctx;
     const t = this.t;
     const el = this as unknown as Element;
-    const chart = this.options.chart && !config.compact;
+    const items = this.options.items;
+    const active = items.filter((id) => this.isActive(id) || this.open.has(id));
+    const rest = items.filter((id) => !active.includes(id));
+    const chartAllowed = this.options.chart && !config.compact;
     return html`
-      ${chart ? html`
+      ${!snap.forecast_ok ? html`<div class="alert info"><ha-icon icon="mdi:information-outline"></ha-icon><span>${t("alert.no_forecast")}</span></div>` : nothing}
+      ${active.map((id) => this.rowFor(id))}
+      ${rest.length ? html`<div class="more">
+        <button class="link" aria-expanded=${this.moreOpen} @click=${() => (this.moreOpen = !this.moreOpen)}>
+          <ha-icon icon=${this.moreOpen ? "mdi:chevron-down" : "mdi:chevron-right"}></ha-icon>
+          ${t("influences.no_effect", { count: rest.length, list: rest.map((id) => t(`influences.${id}`).toLowerCase()).join(", ") })}</button>
+        <span class="spacer"></span>
+        ${chartAllowed ? html`<button class="link" aria-expanded=${this.chartOpen} @click=${() => (this.chartOpen = !this.chartOpen)}>
+          ${t("influences.chart_24h")}</button>` : nothing}
+      </div>
+      ${this.moreOpen ? rest.map((id) => this.rowFor(id)) : nothing}` : chartAllowed ? html`<div class="more"><span class="spacer"></span>
+        <button class="link" aria-expanded=${this.chartOpen} @click=${() => (this.chartOpen = !this.chartOpen)}>${t("influences.chart_24h")}</button></div>` : nothing}
+      ${chartAllowed && this.chartOpen ? html`
         <div class="chart"><canvas role="img" aria-label=${t("influences.chart_label")}></canvas></div>
-        <div class="series" role="group" aria-label=${t("influences.series_label")}>
+        <div class="chips series" role="group" aria-label=${t("influences.series_label")}>
           ${this.availableSeries.map((s) => html`<button class="chip" aria-pressed=${this.shown.has(s.key)}
-            @click=${() => this.toggleSeries(s.key)}>
+            @click=${() => (this.shown = this.toggle(this.shown, s.key))}>
             <i style="background:${cssVar(el, s.color, s.fallback)}"></i>${t(`influences.series.${String(s.key)}`)}</button>`)}
         </div>` : nothing}
-      ${!snap.forecast_ok ? html`<div class="alert info"><ha-icon icon="mdi:information-outline"></ha-icon>${t("alert.no_forecast")}</div>` : nothing}
-      ${this.options.items.map((id) => (id === "slunce" ? this.sunItem() : this.weatherItem(id)))}
     `;
   }
 }

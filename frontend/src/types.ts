@@ -65,6 +65,7 @@ export interface CalcResult {
   safe_mode: boolean;
   result: number;
   clamped: boolean;
+  sun_factor?: number;
 }
 
 export interface CalcLogEntry {
@@ -160,4 +161,6 @@ export interface Snapshot {
   history: ChartPoint[];
   forecast: ChartPoint[];
   forecast_ok: boolean;
+  /** Dráha slunce [azimut, elevace] dnes a o slunovratech. */
+  sun_paths?: { today: [number, number][]; summer: [number, number][]; winter: [number, number][] };
 }

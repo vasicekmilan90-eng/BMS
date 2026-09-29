@@ -151,7 +151,7 @@ export class BmsCardEditor extends LitElement {
       ...(s.type === "status" ? [] : [{ name: "collapsed", selector: { boolean: {} } }]),
       { name: "admin_only", selector: { boolean: {} } },
       this.single("screen", ["all", "mobile", "desktop"], "editor.screen_opt"),
-      this.single("span", ["1", "2"], "editor.span_opt"),
+      this.single("column", ["0", "1", "2"], "editor.column_opt"),
     ];
     const specific: FormSchema[] = (() => {
       switch (s.type) {
@@ -190,7 +190,7 @@ export class BmsCardEditor extends LitElement {
 
   private sectionData(s: NormalizedSection): Record<string, unknown> {
     const screen = screenOf(s.visibility);
-    const data: Record<string, unknown> = { ...s, screen: screen === "advanced" ? "all" : screen, span: String(s.span) };
+    const data: Record<string, unknown> = { ...s, screen: screen === "advanced" ? "all" : screen, column: String(s.column) };
     if (s.type === "actions") {
       data.durations = s.durations.join(", ");
       data.profiles = s.profiles.join(", ");
@@ -206,7 +206,7 @@ export class BmsCardEditor extends LitElement {
   private sectionChanged(index: number, value: Record<string, unknown>): void {
     const list = [...this.normalized.sections];
     const current = list[index];
-    const raw: Record<string, unknown> = { ...value, type: current.type, span: Number(value.span) || 1 };
+    const raw: Record<string, unknown> = { ...value, type: current.type, column: Number(value.column) || 0 };
     const screen = value.screen as Screen;
     raw.visibility = screenOf(current.visibility) === "advanced" && screen === "all"
       ? current.visibility

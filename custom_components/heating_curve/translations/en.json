@@ -130,6 +130,7 @@
       "oblacnost_max_eff": { "name": "Clouds: Max correction" },
       "solarni_start": { "name": "Solar window: Start" },
       "solarni_konec": { "name": "Solar window: End" },
+      "slunce_orientace": { "name": "Sun: Window direction" },
       "slunce_max_eff": { "name": "Sun: Max correction" },
       "prepocet_interval": { "name": "Recalculation: Interval" },
       "prepocet_delta": { "name": "Recalculation: Temperature change" },
@@ -161,6 +162,14 @@
           "cas": "By time",
           "teplota": "By temperature change",
           "oboji": "Time and temperature"
+        }
+      },
+      "slunce_rezim": {
+        "name": "Sun: Mode",
+        "state": {
+          "okno": "Fixed azimuth window",
+          "fasada": "By window direction",
+          "nad_obzorem": "Whole day above horizon"
         }
       }
     },

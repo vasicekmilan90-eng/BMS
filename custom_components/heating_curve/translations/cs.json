@@ -130,6 +130,7 @@
       "oblacnost_max_eff": { "name": "Oblačnost: Max. korekce" },
       "solarni_start": { "name": "Solární okno: Začátek" },
       "solarni_konec": { "name": "Solární okno: Konec" },
+      "slunce_orientace": { "name": "Slunce: Směr oken" },
       "slunce_max_eff": { "name": "Slunce: Max. korekce" },
       "prepocet_interval": { "name": "Přepočet: Interval" },
       "prepocet_delta": { "name": "Přepočet: Změna teploty" },
@@ -161,6 +162,14 @@
           "cas": "Podle času",
           "teplota": "Podle změny teploty",
           "oboji": "Čas i teplota"
+        }
+      },
+      "slunce_rezim": {
+        "name": "Slunce: Režim",
+        "state": {
+          "okno": "Pevné okno azimutu",
+          "fasada": "Podle směru oken",
+          "nad_obzorem": "Celý den nad obzorem"
         }
       }
     },

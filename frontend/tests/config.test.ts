@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { checkConditions, conditionEntities, mediaQueries } from "../src/conditions";
-import { SECTIONS, canEdit, compactSection, estimateRows, makeSection, normalizeConfig } from "../src/config";
+import { SECTIONS, canEdit, compactSection, estimateRows, makeSection, normalizeConfig, sectionColumn } from "../src/config";
 
 const types = (config: Parameters<typeof normalizeConfig>[0], defaults?: readonly string[]) =>
   normalizeConfig(config, defaults).sections.map((s) => s.type);
@@ -14,8 +14,10 @@ describe("konfigurace", () => {
     const log = c.sections.find((s) => s.type === "log")!;
     expect(log.collapsed).toBe(true);
     expect(c.sections.find((s) => s.type === "profiles")!.admin_only).toBe(true);
-    expect(c.sections.find((s) => s.type === "influences")!.span).toBe(1);
-    expect(normalizeConfig({ type: "x", sections: [{ type: "curve", span: 2 }] }).sections[0].span).toBe(2);
+    expect(c.sections.find((s) => s.type === "influences")!.column).toBe(0);
+    expect(sectionColumn(c.sections.find((s) => s.type === "influences")!)).toBe(2);
+    expect(sectionColumn(c.sections.find((s) => s.type === "automations")!)).toBe(1);
+    expect(normalizeConfig({ type: "x", sections: [{ type: "curve", column: 1 }] }).sections[0].column).toBe(1);
   });
 
   it("volby sekcí se ověří", () => {

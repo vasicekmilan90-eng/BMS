@@ -10,27 +10,25 @@ const EMPTY_RULE: ScheduleRule = {
   id: "", enabled: true, type: "date", profile: "", date_from: "11-01", date_to: "03-31",
   temp_op: "<", temp_val: 5, temp_days: 3,
 };
-const PALETTE = ["var(--bms-info)", "var(--bms-heat)", "var(--bms-ok)", "var(--bms-night)", "var(--bms-frost)", "var(--bms-warn)"];
+const PALETTE = ["var(--bms-cool)", "var(--bms-ok)", "var(--bms-heat)", "var(--bms-night)", "var(--bms-frost)"];
 
 @customElement("bms-sec-schedules")
 export class BmsSchedulesSection extends BmsSection {
   static styles = [baseStyles, css`
-    ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-    li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--bms-border); border-radius: 8px; }
-    li .desc { flex: 1; font-size: var(--ha-font-size-s, 13px); }
-    li.disabled .desc { opacity: 0.55; }
-    li.current { border-color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 6%, transparent); }
-    li .swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .item .txt.edit { cursor: pointer; }
+    .item.disabled .txt { opacity: 0.55; }
     .order { display: flex; flex-direction: column; }
-    .order .icon-btn { padding: 0; }
+    .order .icon-btn { height: 26px; }
     .two { display: flex; gap: 8px; align-items: center; }
     .two input, .two select { flex: 1; min-width: 0; }
-    .timeline { width: 100%; display: block; margin-bottom: 10px; }
-    .months { display: flex; justify-content: space-between; font-size: 10px; color: var(--bms-muted); margin: -6px 0 10px; }
+    .timeline { width: 100%; display: block; }
+    .months { display: flex; justify-content: space-between; font-size: 10px; color: var(--bms-muted); margin: 2px 0 8px; }
+    .footer { margin-top: 8px; }
   `];
 
   @state() private draft?: ScheduleRule;
   @state() private error?: string;
+  @state() private reorder = false;
   @query("dialog") private dialog!: HTMLDialogElement;
 
   private edit(rule?: ScheduleRule): void {
@@ -54,6 +52,15 @@ export class BmsSchedulesSection extends BmsSection {
     }
     const ok = await this.run(() => this.ctx.store.callService("save_schedule", { ...rule }));
     if (ok) this.dialog.close();
+  }
+
+  private async removeRule(): Promise<void> {
+    const rule = this.draft;
+    if (!rule?.id) return;
+    this.dialog.close();
+    if (await this.confirm(this.t("schedule.confirm_delete"), describeRule(rule, this.t, this.ctx.lang), this.t("schedule.delete"), true)) {
+      this.run(() => this.ctx.store.callService("delete_schedule", { id: rule.id }));
+    }
   }
 
   private move(index: number, dir: -1 | 1): void {
@@ -130,32 +137,32 @@ export class BmsSchedulesSection extends BmsSection {
             ${this.snap.profiles.map((p) => html`<option value=${p} ?selected=${p === r.profile}>${p}</option>`)}
           </select>
         </div>
-        ${this.error ? html`<div class="alert error" role="alert">${this.error}</div>` : nothing}
+        ${this.error ? html`<div class="alert error" role="alert"><span>${this.error}</span></div>` : nothing}
         <div class="actions">
-          <button type="button" class="btn" @click=${() => this.dialog.close()}>${t("common.cancel")}</button>
-          <button type="submit" class="btn primary">${t("common.save")}</button>
+          ${r.id ? html`<button type="button" class="btn text danger" @click=${() => this.removeRule()}>${t("schedule.delete")}</button>` : nothing}
+          <span class="spacer"></span>
+          <button type="button" class="btn text" @click=${() => this.dialog.close()}>${t("common.cancel")}</button>
+          <button type="submit" class="btn text">${t("common.save")}</button>
         </div>
       </form>`;
   }
 
-  /** Roční osa s obdobími pravidel a dnešním dnem. */
+  /** Roční osa s obdobími pravidel (s názvem profilu) a dnešním dnem. */
   private renderTimeline(rules: ScheduleRule[]) {
-    const dated = rules.map((r, i) => ({ r, color: PALETTE[i % PALETTE.length] })).filter((x) => x.r.type === "date");
+    const dated = rules.map((r, i) => ({ r, color: PALETTE[i % PALETTE.length] })).filter((x) => x.r.type === "date" && x.r.enabled);
     if (!dated.length) return nothing;
     const now = new Date();
     const today = (Date.UTC(2024, now.getMonth(), now.getDate()) - Date.UTC(2024, 0, 1)) / (366 * 86_400_000);
-    const rowH = 8;
-    const height = dated.length * (rowH + 3) + 4;
+    const rowH = 16;
+    const height = dated.length * (rowH + 3) + 2;
     return html`
-      <svg class="timeline" viewBox="0 0 360 ${height}" preserveAspectRatio="none" style="height:${height}px"
-        role="img" aria-label=${this.t("schedule.timeline")}>
-        ${Array.from({ length: 11 }, (_, i) => svg`<line x1=${((i + 1) / 12) * 360} x2=${((i + 1) / 12) * 360} y1="0" y2=${height}
-          stroke="var(--bms-border)" vector-effect="non-scaling-stroke"></line>`)}
+      <svg class="timeline" viewBox="0 0 360 ${height}" style="height:${height}px" role="img" aria-label=${this.t("schedule.timeline")}>
         ${dated.map(({ r, color }, row) => yearSegments(r.date_from, r.date_to).map(([a, b]) => svg`
-          <rect x=${a * 360} y=${2 + row * (rowH + 3)} width=${Math.max(1, (b - a) * 360)} height=${rowH} rx="2"
-            fill=${color} opacity=${r.enabled ? (r.id === this.snap.active_rule ? 1 : 0.55) : 0.15}></rect>`))}
-        <line x1=${today * 360} x2=${today * 360} y1="0" y2=${height} stroke="var(--primary-text-color)" stroke-width="2"
-          vector-effect="non-scaling-stroke"></line>
+          <rect x=${a * 360} y=${1 + row * (rowH + 3)} width=${Math.max(1, (b - a) * 360)} height=${rowH} rx="4"
+            fill=${color} opacity=${r.id === this.snap.active_rule ? 1 : 0.55}></rect>
+          ${(b - a) * 360 > r.profile.length * 5 + 8
+            ? svg`<text x=${a * 360 + 5} y=${1 + row * (rowH + 3) + 11.5} font-size="9.5" fill="#fff">${r.profile}</text>` : nothing}`))}
+        <line x1=${today * 360} x2=${today * 360} y1="0" y2=${height} stroke="var(--primary-text-color)" stroke-width="2"></line>
       </svg>
       <div class="months">${this.monthNames().map((m) => html`<span>${m}</span>`)}</div>`;
   }
@@ -164,36 +171,34 @@ export class BmsSchedulesSection extends BmsSection {
     const { snap, editable, lang } = this.ctx;
     const t = this.t;
     const rules = snap.schedules;
-    const colors = rules.map((r, i) => (r.type === "date" ? PALETTE[i % PALETTE.length] : "transparent"));
+    const reorder = editable && this.reorder;
     return html`
       ${this.renderTimeline(rules)}
-      ${rules.length ? html`<ul>
-        ${rules.map((rule, i) => html`
-          <li class="${rule.enabled ? "" : "disabled"} ${rule.id === snap.active_rule ? "current" : ""}"
-            aria-current=${rule.id === snap.active_rule ? "true" : nothing}>
-            ${editable ? html`<div class="order">
-              <button class="icon-btn" ?disabled=${i === 0} aria-label=${t("schedule.up")} @click=${() => this.move(i, -1)}>
-                <ha-icon icon="mdi:chevron-up"></ha-icon></button>
-              <button class="icon-btn" ?disabled=${i === rules.length - 1} aria-label=${t("schedule.down")} @click=${() => this.move(i, 1)}>
-                <ha-icon icon="mdi:chevron-down"></ha-icon></button>
-            </div>` : nothing}
-            <span class="swatch" style="background:${colors[i]}"></span>
-            <ha-switch .checked=${rule.enabled} ?disabled=${!editable} aria-label=${t("schedule.enabled")}
-              @change=${(e: Event) => this.run(() => this.ctx.store.callService("save_schedule",
-                { ...rule, enabled: (e.target as HTMLInputElement).checked }))}></ha-switch>
-            <span class="desc">${describeRule(rule, t, lang)}
-              ${rule.id === snap.active_rule ? html`<span class="chip ok">${t("schedule.current")}</span>` : nothing}</span>
-            ${editable ? html`
-              <button class="icon-btn" aria-label=${t("schedule.edit")} @click=${() => this.edit(rule)}><ha-icon icon="mdi:pencil"></ha-icon></button>
-              <button class="icon-btn" aria-label=${t("schedule.delete")}
-                @click=${() => confirm(t("schedule.confirm_delete")) && this.run(() => this.ctx.store.callService("delete_schedule", { id: rule.id }))}>
-                <ha-icon icon="mdi:delete"></ha-icon></button>` : nothing}
-          </li>`)}
-      </ul>` : html`<div class="empty">${t("schedule.empty")}</div>`}
-      ${editable ? html`<div class="actions" style="margin-top:8px">
+      ${rules.length ? rules.map((rule, i) => html`
+        <div class="item ${rule.enabled ? "" : "disabled"}">
+          ${reorder ? html`<div class="order">
+            <button class="icon-btn" ?disabled=${i === 0} aria-label=${t("schedule.up")} @click=${() => this.move(i, -1)}>
+              <ha-icon icon="mdi:chevron-up"></ha-icon></button>
+            <button class="icon-btn" ?disabled=${i === rules.length - 1} aria-label=${t("schedule.down")} @click=${() => this.move(i, 1)}>
+              <ha-icon icon="mdi:chevron-down"></ha-icon></button>
+          </div>` : nothing}
+          <div class="txt ${editable ? "edit" : ""}" role=${editable ? "button" : nothing} tabindex=${editable ? "0" : nothing}
+            @click=${() => editable && this.edit(rule)}
+            @keydown=${(e: KeyboardEvent) => editable && e.key === "Enter" && this.edit(rule)}>
+            <div class="name">${describeRule(rule, t, lang)}
+              ${rule.id === snap.active_rule ? html`<span class="badge ok">${t("schedule.current")}</span>` : nothing}</div>
+            <div class="desc">${t(rule.type === "date" ? "schedule.type_date" : "schedule.type_temp")}</div>
+          </div>
+          <ha-switch .checked=${rule.enabled} ?disabled=${!editable} aria-label=${t("schedule.enabled")}
+            @change=${(e: Event) => this.run(() => this.ctx.store.callService("save_schedule",
+              { ...rule, enabled: (e.target as HTMLInputElement).checked }))}></ha-switch>
+        </div>`) : html`<div class="empty">${t("schedule.empty")}</div>`}
+      ${editable ? html`<div class="actions footer">
         <button class="btn" @click=${() => this.edit()}><ha-icon icon="mdi:plus"></ha-icon>${t("schedule.add")}</button>
-        <span class="small muted">${t("schedule.hint")}</span>
+        ${rules.length > 1 ? html`<button class="btn text" aria-pressed=${this.reorder} @click=${() => (this.reorder = !this.reorder)}>
+          ${t(this.reorder ? "common.done" : "schedule.reorder")}</button>` : nothing}
       </div>
+      <div class="small muted">${t("schedule.hint")}</div>
       <dialog @close=${() => (this.draft = undefined)}>${this.renderDialog()}</dialog>` : nothing}
     `;
   }

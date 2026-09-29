@@ -5,6 +5,16 @@ import type { CalcLogEntry, CalcResult, CurvePoint, ScheduleRule, Snapshot } fro
 
 export type RegulationState = "inactive" | "boost" | "reduction" | "frost" | "night" | "bypass" | "safe" | "active";
 
+export const SUN_MODES = ["okno", "fasada", "nad_obzorem"] as const;
+export type SunMode = (typeof SUN_MODES)[number];
+
+/** Jakou část doby nad obzorem (podle vzorků dráhy) pokrývá pevné okno azimutu. */
+export function sunCoverage(path: [number, number][], start: number, end: number): number {
+  const up = path.filter(([, el]) => el > 0);
+  if (!up.length || end <= start) return 0;
+  return up.filter(([az]) => az >= start && az <= end).length / up.length;
+}
+
 export function regulationState(snap: Snapshot): RegulationState {
   const r = snap.result;
   if (!snap.settings.hlavni_vypinac) return "inactive";
@@ -45,6 +55,8 @@ export function remainingMinutes(snap: Snapshot, nowSec: number): number {
 export interface Alert {
   level: "info" | "warning" | "error";
   text: string;
+  /** Sekce, kde se dá problém řešit. */
+  target?: "curve" | "influences" | "settings";
 }
 
 export function alerts(snap: Snapshot, t: Translator, nowSec: number): Alert[] {
@@ -63,10 +75,54 @@ export function alerts(snap: Snapshot, t: Translator, nowSec: number): Alert[] {
   const recentClamps = snap.clamp_log.filter((c) => c.ts > nowSec - 6 * 3600);
   if (recentClamps.length >= 3) {
     const over = recentClamps[0].raw > recentClamps[0].clamped;
-    list.push({ level: "warning", text: t(over ? "alert.clamp_high" : "alert.clamp_low", { count: recentClamps.length }) });
+    list.push({ level: "warning", text: t(over ? "alert.clamp_high" : "alert.clamp_low", { count: recentClamps.length }), target: "curve" });
   }
-  if (snap.problems.forecast) list.push({ level: "info", text: t("alert.no_forecast") });
+  if (snap.problems.forecast) list.push({ level: "info", text: t("alert.no_forecast"), target: "influences" });
   return list;
+}
+
+/** Součet korekcí počasí (vítr, srážky, vlhkost, oblačnost, slunce). */
+export function weatherCorrection(r: CalcResult | null): number {
+  if (!r) return 0;
+  return r.corr_wind + r.corr_rain + r.corr_humidity + r.corr_clouds + r.corr_sun;
+}
+
+/** Jedna věta „proč právě tahle teplota“ + případné omezení limitem zvlášť (jiná barva). */
+export function reasonSentence(snap: Snapshot, t: Translator, language: string): { text: string; limit?: string } {
+  const r = snap.result;
+  if (!r) return { text: "" };
+  const parts: string[] = [];
+  if (r.safe_mode) {
+    parts.push(t("reason.safe", { value: formatNumber(r.raw, language, 0) }));
+  } else {
+    parts.push(t("reason.curve", { value: formatNumber(r.curve_temp, language, 0) }));
+    const weather = weatherCorrection(r);
+    if (Math.abs(weather) >= 0.05) parts.push(t("reason.weather", { value: formatSigned(weather, language) }));
+    if (Math.abs(r.night_offset) >= 0.05) parts.push(t("reason.night", { value: formatSigned(r.night_offset, language) }));
+    if (Math.abs(r.boost) >= 0.05) {
+      parts.push(t(r.boost > 0 ? "reason.boost" : "reason.reduction", { value: formatSigned(r.boost, language) }));
+    }
+  }
+  let limit: string | undefined;
+  if (r.clamped) {
+    limit = r.raw > r.result
+      ? t("reason.limit_max", { value: formatNumber(r.t_max, language, 0) })
+      : t("reason.limit_min", { value: formatNumber(r.t_min, language, 0) });
+  }
+  if (r.frost_active && !r.clamped) parts.push(t("reason.frost"));
+  return { text: parts.join(", "), limit };
+}
+
+/** „1 h 25 min“ / „25 min“. */
+export function formatDuration(minutes: number, t: Translator): string {
+  const m = Math.max(0, Math.round(minutes));
+  const h = Math.floor(m / 60);
+  return h ? t("time.hours_minutes", { h, m: m % 60 }) : t("time.minutes", { m });
+}
+
+/** Události, které zajímají uživatele (bez pravidelného přepočtu). */
+export function userEvents(snap: Snapshot, limit = 2): Snapshot["next_events"] {
+  return snap.next_events.filter((e) => e.kind !== "recalc").slice(0, limit);
 }
 
 export function describeRule(rule: ScheduleRule, t: Translator, language: string): string {
