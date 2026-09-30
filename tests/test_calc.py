@@ -63,6 +63,9 @@ def test_compute_sun_modes() -> None:
     assert facade.corr_sun == 0
     off = calc.compute(_inp(**base, settings={"vliv_slunce": False, "slunce_rezim": "nad_obzorem"}))
     assert off.corr_sun == 0 and off.sun_factor == pytest.approx(1)
+    # oblačnost v čase polohy slunce má přednost před aktuální
+    cloudy = calc.compute(_inp(**base, sun_clouds=100.0, settings={"slunce_rezim": "nad_obzorem"}))
+    assert cloudy.corr_sun == 0
 
 
 @pytest.mark.parametrize(("hour", "start", "end", "night"), [

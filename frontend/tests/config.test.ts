@@ -32,6 +32,8 @@ describe("konfigurace", () => {
     expect(curve.type === "curve" && curve.editor).toBe("shift");
     expect(curve.type === "curve" && curve.range).toBeUndefined();
     expect(log.type === "log" && [log.limit, log.filter]).toEqual([20, "writes"]);
+    const settings = normalizeConfig({ type: "x", sections: [{ type: "settings", groups: ["limits", "forecast"] }] }).sections[0];
+    expect(settings.type === "settings" && settings.groups).toEqual(["limits"]);
   });
 
   it("převod zápisu z 0.2", () => {

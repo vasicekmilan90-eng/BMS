@@ -146,6 +146,7 @@ class CalcInput:
     curve: Sequence[Point]
     settings: Mapping[str, Any]
     sun_noon_elevation: float | None = None
+    sun_clouds: float | None = None  # oblačnost v čase polohy slunce (s předpovědí slunce)
 
 
 @dataclass(slots=True)
@@ -193,7 +194,8 @@ def compute(inp: CalcInput) -> CalcResult:
             str(s.get("slunce_rezim", "")), inp.sun_elevation, inp.sun_azimuth, s, inp.sun_noon_elevation,
         )
         if s["vliv_slunce"]:
-            corr_sun = float(s["slunce_max_eff"]) * factor * cloud_factor(inp.clouds)
+            clouds = inp.sun_clouds if inp.sun_clouds is not None else inp.clouds
+            corr_sun = float(s["slunce_max_eff"]) * factor * cloud_factor(clouds)
 
     night_active = bool(s["night_mode"]) and is_night(inp.hour, int(s["day_start"]), int(s["day_end"]))
     night_offset = float(s["night_offset"]) if night_active else 0.0

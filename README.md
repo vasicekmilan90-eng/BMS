@@ -35,7 +35,7 @@ Najdete je v *Přidat kartu* pod názvem „BMS …“. Všechny mají vizuáln�
 | `custom:bms-curve-card` | graf a editor topné křivky, simulace „co kdyby“ |
 | `custom:bms-influences-card` | vlivy počasí a slunce s grafem |
 | `custom:bms-log-card` | výpočetní log |
-| `custom:bms-settings-card` | limity, výpadek venkovní teploty, výchozí boost, předpověď, přepočet |
+| `custom:bms-settings-card` | limity, výpadek venkovní teploty, výchozí přitápění a útlum, přepočet |
 
 Dále integrace přidává **odznak** `custom:bms-badge` (teplota a stav regulace) a **funkce dlaždic**
 pro entity regulátoru: `custom:bms-temporary-change` (boost/útlum) a `custom:bms-profile-select`
@@ -83,7 +83,7 @@ sections:
     filter: all           # all | writes
     collapsed: true
   - type: settings
-    groups: [limits, fallback, temporary, forecast, recalc]
+    groups: [limits, fallback, temporary, recalc]
     collapsed: true
 ```
 
@@ -107,7 +107,11 @@ Sekce lze zapsat i jen názvem (`- curve`). Zápis z verze 0.2 (`modes`, `quick_
   teploty o `number.bms_prepocet_delta`, nebo obojí. Zobrazené hodnoty se obnovují průběžně.
 - **Termostat** se nastavuje s ohledem na jeho krok a rozsah (`target_temp_step`, `min_temp`, `max_temp`),
   jen když se hodnota liší a termostat není vypnutý.
-- **Předpověď** se stahuje jednou a sdílí; každý vliv má vlastní výhled v hodinách.
+- **Předpověď** se stahuje jednou a sdílí.
+  - **Křivka** může počítat s teplotou teď, nebo s předpovězenou teplotou za N hodin — přepíná se přímo
+    pod grafem křivky („Počítá s: Teď | Předpověď za N h“). Výhled odpovídá setrvačnosti domu, obvykle 2–6 h.
+  - **Každý vliv** včetně slunce má vlastní „Použít předpověď“ a výhled v hodinách. U slunce se pak bere
+    poloha slunce i oblačnost ze stejného okamžiku.
 - **Slunce** (`select.bms_slunce_rezim`) má tři způsoby výpočtu:
   - *Pevné okno* — účinek jen mezi dvěma azimuty (původní chování). Východ a západ slunce se během roku
     posouvají, okno ne, takže v zimě a v létě pokrývá jinou část dne; karta ukazuje, kolik procent

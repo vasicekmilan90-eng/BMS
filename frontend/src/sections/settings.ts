@@ -12,7 +12,6 @@ const GROUPS: Record<GroupId, { icon: string; numbers: string[]; toggles?: strin
   limits: { icon: "mdi:thermometer-lines", numbers: ["limit_min", "limit_max"] },
   fallback: { icon: "mdi:shield-check-outline", numbers: ["safe_temp", "safe_curve_temp"] },
   temporary: { icon: "mdi:timer-outline", numbers: ["boost_amount", "boost_hours", "reduction_amount", "reduction_hours"] },
-  forecast: { icon: "mdi:weather-partly-cloudy", toggles: ["pouziti_predpovedi"], numbers: ["predpoved_hodin"] },
   recalc: { icon: "mdi:timer-refresh-outline", numbers: ["prepocet_interval", "prepocet_delta"] },
 };
 

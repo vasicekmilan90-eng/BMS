@@ -37,6 +37,10 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
     .sim .res { flex-basis: 100%; }
     .sim .res b { font-weight: 600; }
     .footer { margin-top: 10px; }
+    .input { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: var(--ha-font-size-s, 13px); }
+    .input select { min-height: 34px; padding: 4px 8px; }
+    .input b { font-weight: 600; }
+    .input .warn { color: var(--bms-warn); }
   `];
 
   @state() private draft?: CurvePoint[];
@@ -341,6 +345,41 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
       html`<span><i class=${band ? "band" : ""} style="background:${color}"></i>${label}</span>`)}</div>`;
   }
 
+  /** S jakou venkovní teplotou křivka počítá: teď (senzor), nebo předpověď za N hodin. */
+  private renderInput() {
+    const { snap, lang, editable } = this.ctx;
+    const t = this.t;
+    const useFc = this.on("pouziti_predpovedi");
+    const input = curveInput(snap);
+    const hours = this.num("predpoved_hodin");
+    const now = formatTemp(snap.values.raw_outdoor_temp, lang);
+    const value = input.forecast
+      ? html`<b>${formatTemp(input.value, lang)}</b> <span class="muted">(${t("curve.input_now_value", { value: now })})</span>`
+      : html`<b>${now}</b>`;
+    const unavailable = useFc && !input.forecast
+      ? html`<span class="warn small">${t("curve.input_unavailable")}</span>` : nothing;
+    if (!editable) {
+      return html`<div class="input"><span class="muted">${input.forecast
+        ? t("curve.input_forecast_text", { hours }) : t("curve.input_now_text")}</span> ${value} ${unavailable}</div>`;
+    }
+    const options = [...new Set([1, 2, 3, 4, 6, 8, 12, 24, 48, 72, hours])].sort((a, b) => a - b);
+    return html`<div class="input">
+      <span class="muted">${t("curve.input")}</span>
+      <div class="seg" role="group" aria-label=${t("curve.input")}>
+        <button aria-pressed=${!useFc} @click=${() => useFc && this.setSetting("pouziti_predpovedi", false, t("curve.input"))}>
+          ${t("curve.input_mode_now")}</button>
+        <button aria-pressed=${useFc} @click=${() => !useFc && this.setSetting("pouziti_predpovedi", true, t("curve.input"))}>
+          ${t("curve.input_mode_forecast")}</button>
+      </div>
+      ${useFc ? html`<select aria-label=${t("curve.input_hours")} title=${t("curve.input_hours_hint")} .value=${String(hours)}
+        @change=${(e: Event) => this.setSetting("predpoved_hodin", Number((e.target as HTMLSelectElement).value), t("curve.input_hours"))}>
+        ${options.map((h) => html`<option value=${h} ?selected=${h === hours}>${t("influences.in_hours", { hours: h })}</option>`)}
+      </select>` : nothing}
+      <span>→ ${value}</span>
+      ${unavailable}
+    </div>`;
+  }
+
   protected render() {
     const { config, lang } = this.ctx;
     const t = this.t;
@@ -377,6 +416,7 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
         <canvas role="img" aria-label=${t("curve.chart_label")}></canvas>
       </div>
       ${this.editing ? nothing : this.renderLegend()}
+      ${this.renderInput()}
       ${this.editing && this.tableOpen ? html`
         <table>
           <thead><tr><th>${t("curve.outdoor_short")} (°C)</th><th>${t("curve.flow_short")} (°C)</th><th></th></tr></thead>
