@@ -51,6 +51,7 @@
   "status.on_thermostat": "Na termostatu",
   "status.not_written": "Termostat zatím nenastaven",
   "status.outdoor": "Venku",
+  "status.curve_forecast": "křivka počítá s předpovědí {value} za {hours} h",
   "status.why": "Proč?",
   "status.boost_remaining": "zbývá {minutes} min",
   "status.trend_label": "Výsledná teplota za 24 h: {min} až {max} °C",
@@ -67,6 +68,8 @@
   "reason.limit_min": "zvýšeno na min. {value} °C",
 
   "why.curve": "Křivka při {out} °C venku",
+  "why.curve_forecast": "Křivka při {out} °C — předpověď za {hours} h",
+  "why.measured": "venku teď ({source})",
   "why.safe": "Bezpečný bod (výpadek venkovní teploty)",
   "why.weather": "Počasí",
   "why.night": "Noční útlum",
@@ -113,6 +116,7 @@
   "summary.active_now": "{list} teď",
   "summary.none_active": "nic neběží",
   "summary.curve": "{out} °C venku → {flow} °C",
+  "summary.curve_forecast": "předpověď {out} °C za {hours} h → {flow} °C",
   "summary.influences": "celkem {value} °C",
   "summary.settings": "limity {min}–{max} °C · přepočet {interval} min",
 
@@ -293,6 +297,7 @@
   "curve.result": "Výsledek",
   "curve.points": "Body",
   "curve.current": "Nyní",
+  "curve.current_forecast": "Nyní (podle předpovědi)",
   "curve.safe_point": "Bezpečný bod",
   "curve.limits": "Limity",
   "curve.out_of_limits": "Mimo limity",

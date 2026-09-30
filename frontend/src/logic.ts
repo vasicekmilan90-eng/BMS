@@ -113,6 +113,16 @@ export function reasonSentence(snap: Snapshot, t: Translator, language: string):
   return { text: parts.join(", "), limit };
 }
 
+/** Jakou venkovní teplotu křivka použila — s předpovědí to není hodnota senzoru, ale teplota za N hodin. */
+export function curveInput(snap: Snapshot): { value: number | null; forecast: boolean; hours: number } {
+  const fc = snap.values.forecast_temp;
+  return {
+    value: snap.values.applied_out_temp ?? null,
+    forecast: Boolean(snap.settings.pouziti_predpovedi) && fc !== null && fc !== undefined,
+    hours: Number(snap.settings.predpoved_hodin),
+  };
+}
+
 /** „1 h 25 min“ / „25 min“. */
 export function formatDuration(minutes: number, t: Translator): string {
   const m = Math.max(0, Math.round(minutes));

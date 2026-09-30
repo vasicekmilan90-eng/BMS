@@ -51,6 +51,7 @@
   "status.on_thermostat": "On thermostat",
   "status.not_written": "Thermostat not set yet",
   "status.outdoor": "Outdoor",
+  "status.curve_forecast": "curve uses the forecast {value} in {hours} h",
   "status.why": "Why?",
   "status.boost_remaining": "{minutes} min left",
   "status.trend_label": "Resulting temperature over 24 h: {min} to {max} °C",
@@ -67,6 +68,8 @@
   "reason.limit_min": "raised to min {value} °C",
 
   "why.curve": "Curve at {out} °C outdoor",
+  "why.curve_forecast": "Curve at {out} °C — forecast in {hours} h",
+  "why.measured": "outdoor now ({source})",
   "why.safe": "Safe point (outdoor temperature outage)",
   "why.weather": "Weather",
   "why.night": "Night setback",
@@ -113,6 +116,7 @@
   "summary.active_now": "{list} now",
   "summary.none_active": "nothing running",
   "summary.curve": "{out} °C outdoor → {flow} °C",
+  "summary.curve_forecast": "forecast {out} °C in {hours} h → {flow} °C",
   "summary.influences": "total {value} °C",
   "summary.settings": "limits {min}–{max} °C · every {interval} min",
 
@@ -293,6 +297,7 @@
   "curve.result": "Result",
   "curve.points": "Points",
   "curve.current": "Now",
+  "curve.current_forecast": "Now (by forecast)",
   "curve.safe_point": "Safe point",
   "curve.limits": "Limits",
   "curve.out_of_limits": "Outside limits",

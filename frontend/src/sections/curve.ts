@@ -6,7 +6,7 @@ import { BmsSection } from "../components.js";
 import type { SectionOptions } from "../config.js";
 import { formatNumber, formatSigned, formatTemp } from "../i18n.js";
 import {
-  curveSlope, interpolate, pointsEqual, shiftCurve, slopeCurve, sortPoints, suggestPoint, validatePoints,
+  curveInput, curveSlope, interpolate, pointsEqual, shiftCurve, slopeCurve, sortPoints, suggestPoint, validatePoints,
 } from "../logic.js";
 import { baseStyles } from "../styles.js";
 import type { CalcResult, CurvePoint } from "../types.js";
@@ -153,7 +153,7 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
       datasets.push({ label: t("curve.result"), data: clamped, borderColor: cRes, pointRadius: 0, borderWidth: 2.5 });
     }
     if (this.has("current") && r && snap.values.applied_out_temp !== null && snap.values.applied_out_temp !== undefined && !this.editing) {
-      datasets.push({ label: t("curve.current"), type: "scatter", pointRadius: 7, pointBorderWidth: 2,
+      datasets.push({ label: t(curveInput(snap).forecast ? "curve.current_forecast" : "curve.current"), type: "scatter", pointRadius: 7, pointBorderWidth: 2,
         data: [{ x: Number(snap.values.applied_out_temp), y: r.result }], borderColor: cssVar(el, "--card-background-color", "#fff"),
         backgroundColor: cRes });
     }
