@@ -92,6 +92,7 @@ SWITCH_SETTINGS: tuple[SwitchSetting, ...] = (
     SwitchSetting("srazky_predpoved",    False),
     SwitchSetting("vlhkost_predpoved",   False),
     SwitchSetting("oblacnost_predpoved", False),
+    SwitchSetting("slunce_predpoved",    False),
 )
 
 SELECT_SETTINGS: tuple[SelectSetting, ...] = (

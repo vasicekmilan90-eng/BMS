@@ -48,12 +48,15 @@
           "prepocet_rezim": "Kdy nastavovat termostat",
           "prepocet_interval": "Interval přepočtu",
           "prepocet_delta": "Změna venkovní teploty pro přepočet",
-          "pouziti_predpovedi": "Křivka a slunce z předpovědi",
-          "predpoved_hodin": "Výhled předpovědi teploty",
+          "pouziti_predpovedi": "Křivka z předpovědi teploty",
+          "predpoved_hodin": "Křivka: výhled předpovědi",
           "slunce_rezim": "Vliv slunce: způsob výpočtu",
-          "slunce_orientace": "Vliv slunce: kam míří okna (azimut)"
+          "slunce_orientace": "Vliv slunce: kam míří okna (azimut)",
+          "slunce_predpoved": "Vliv slunce: použít polohu slunce za výhled",
+          "slunce_predpoved_hodin": "Vliv slunce: výhled"
         },
         "data_description": {
+          "predpoved_hodin": "Křivka počítá s předpovězenou venkovní teplotou za tento počet hodin. Odpovídá setrvačnosti domu, obvykle 2–6 h.",
           "slunce_rezim": "Pevné okno = jen mezi azimuty solárního okna (během roku se vůči východu a západu slunce posouvá). Směr oken = podle úhlu dopadu na okna. Celý den = po celou dobu nad obzorem, vztaženo k dnešnímu poledni.",
           "slunce_orientace": "Použije se v režimu Směr oken: 90° = východ, 180° = jih, 270° = západ."
         }
@@ -114,7 +117,7 @@
       "rozsah_venku_max": { "name": "Rozsah venku: Max" },
       "limit_min": { "name": "Limit termostatu: Min" },
       "limit_max": { "name": "Limit termostatu: Max" },
-      "predpoved_hodin": { "name": "Předpověď: Výhled" },
+      "predpoved_hodin": { "name": "Křivka: Výhled předpovědi" },
       "vitr_predpoved_hodin": { "name": "Vítr: Výhled předpovědi" },
       "srazky_predpoved_hodin": { "name": "Srážky: Výhled předpovědi" },
       "vlhkost_predpoved_hodin": { "name": "Vlhkost: Výhled předpovědi" },
@@ -153,7 +156,7 @@
     },
     "switch": {
       "hlavni_vypinac": { "name": "Hlavní vypínač" },
-      "pouziti_predpovedi": { "name": "Použití předpovědi" },
+      "pouziti_predpovedi": { "name": "Křivka: Použít předpověď" },
       "vliv_vitr": { "name": "Vliv: Vítr" },
       "vliv_srazky": { "name": "Vliv: Srážky" },
       "vliv_vlhkost": { "name": "Vliv: Vlhkost" },
@@ -165,7 +168,8 @@
       "vitr_predpoved": { "name": "Vítr: Použít předpověď" },
       "srazky_predpoved": { "name": "Srážky: Použít předpověď" },
       "vlhkost_predpoved": { "name": "Vlhkost: Použít předpověď" },
-      "oblacnost_predpoved": { "name": "Oblačnost: Použít předpověď" }
+      "oblacnost_predpoved": { "name": "Oblačnost: Použít předpověď" },
+      "slunce_predpoved": { "name": "Slunce: Použít předpověď" }
     },
     "select": {
       "profil_krivky": { "name": "Profil křivky" },

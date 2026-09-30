@@ -48,12 +48,15 @@
           "prepocet_rezim": "When to set the thermostat",
           "prepocet_interval": "Recalculation interval",
           "prepocet_delta": "Outdoor temperature change for recalculation",
-          "pouziti_predpovedi": "Curve and sun from forecast",
-          "predpoved_hodin": "Temperature forecast horizon",
+          "pouziti_predpovedi": "Curve from temperature forecast",
+          "predpoved_hodin": "Curve: forecast horizon",
           "slunce_rezim": "Sun influence: calculation mode",
-          "slunce_orientace": "Sun influence: window direction (azimuth)"
+          "slunce_orientace": "Sun influence: window direction (azimuth)",
+          "slunce_predpoved": "Sun influence: use the sun position after the horizon",
+          "slunce_predpoved_hodin": "Sun influence: horizon"
         },
         "data_description": {
+          "predpoved_hodin": "The curve uses the forecast outdoor temperature this many hours ahead. Matches the building's thermal inertia, usually 2–6 h.",
           "slunce_rezim": "Fixed window = only between the solar window azimuths (shifts against sunrise and sunset during the year). Window direction = by the angle of incidence on the windows. Whole day = the whole time above the horizon, relative to today's noon.",
           "slunce_orientace": "Used in the Window direction mode: 90° = east, 180° = south, 270° = west."
         }
@@ -114,7 +117,7 @@
       "rozsah_venku_max": { "name": "Outdoor range: Max" },
       "limit_min": { "name": "Thermostat limit: Min" },
       "limit_max": { "name": "Thermostat limit: Max" },
-      "predpoved_hodin": { "name": "Forecast: Horizon" },
+      "predpoved_hodin": { "name": "Curve: Forecast horizon" },
       "vitr_predpoved_hodin": { "name": "Wind: Forecast horizon" },
       "srazky_predpoved_hodin": { "name": "Precipitation: Forecast horizon" },
       "vlhkost_predpoved_hodin": { "name": "Humidity: Forecast horizon" },
@@ -153,7 +156,7 @@
     },
     "switch": {
       "hlavni_vypinac": { "name": "Main switch" },
-      "pouziti_predpovedi": { "name": "Use forecast" },
+      "pouziti_predpovedi": { "name": "Curve: Use forecast" },
       "vliv_vitr": { "name": "Influence: Wind" },
       "vliv_srazky": { "name": "Influence: Precipitation" },
       "vliv_vlhkost": { "name": "Influence: Humidity" },
@@ -165,7 +168,8 @@
       "vitr_predpoved": { "name": "Wind: Use forecast" },
       "srazky_predpoved": { "name": "Precipitation: Use forecast" },
       "vlhkost_predpoved": { "name": "Humidity: Use forecast" },
-      "oblacnost_predpoved": { "name": "Clouds: Use forecast" }
+      "oblacnost_predpoved": { "name": "Clouds: Use forecast" },
+      "slunce_predpoved": { "name": "Sun: Use forecast" }
     },
     "select": {
       "profil_krivky": { "name": "Curve profile" },

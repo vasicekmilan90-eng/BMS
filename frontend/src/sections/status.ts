@@ -5,7 +5,7 @@ import { BmsSection } from "../components.js";
 import type { SectionOptions } from "../config.js";
 import { formatNumber, formatSigned, formatTemp, formatTime } from "../i18n.js";
 import {
-  alerts, corrections, reasonSentence, regulationState, relativeTime, userEvents, weatherCorrection,
+  alerts, corrections, curveInput, reasonSentence, regulationState, relativeTime, userEvents, weatherCorrection,
 } from "../logic.js";
 import { baseStyles } from "../styles.js";
 import type { ChartPoint } from "../types.js";
@@ -80,13 +80,16 @@ export class BmsStatusSection extends BmsSection<SectionOptions["status"]> {
     const target = th?.target ?? write.value ?? null;
     const problem = th?.state === "off" ? "off"
       : write.status && !["ok", "unchanged"].includes(write.status) ? write.status : undefined;
+    const input = curveInput(snap);
     return html`<span class="therm">
       ${th || write.status ? html`${t("status.on_thermostat")} <b>${formatTemp(target, lang, 0)}</b>
         ${write.ts ? html` · ${relativeTime(write.ts, now, lang)}` : nothing}
         ${problem ? html` <span class="badge warn">${t(`log.thermostat.${problem}`)}</span>` : nothing}`
         : t("status.not_written")}
       ${this.has("facts") && !config.compact ? html`<br />${t("status.outdoor")} <b>${formatTemp(snap.values.raw_outdoor_temp, lang)}</b>
-        (${t(`source.${snap.temp_source}`)})` : nothing}
+        (${t(`source.${snap.temp_source}`)})${input.forecast ? html` · ${t("status.curve_forecast", {
+          value: formatTemp(input.value, lang), hours: input.hours,
+        })}` : nothing}` : nothing}
     </span>`;
   }
 
@@ -98,10 +101,14 @@ export class BmsStatusSection extends BmsSection<SectionOptions["status"]> {
     const weather = weatherCorrection(r);
     const weatherParts = corrections(snap).filter((c) => c.key !== "night" && c.key !== "boost");
     const row = (label: string, value: string, cls = "") => html`<tr class=${cls}><td>${label}</td><td>${value}</td></tr>`;
+    const input = curveInput(snap);
     return html`<div class="why"><table>
       ${r.safe_mode
         ? row(t("why.safe"), formatTemp(r.raw, lang))
-        : row(t("why.curve", { out: formatNumber(snap.values.applied_out_temp, lang) }), formatTemp(r.curve_temp, lang))}
+        : input.forecast
+          ? html`${row(t("why.curve_forecast", { out: formatNumber(input.value, lang), hours: input.hours }), formatTemp(r.curve_temp, lang))}
+            ${row(t("why.measured", { source: t(`source.${snap.temp_source}`) }), formatTemp(snap.values.raw_outdoor_temp, lang), "sub")}`
+          : row(t("why.curve", { out: formatNumber(input.value, lang) }), formatTemp(r.curve_temp, lang))}
       ${!r.safe_mode && Math.abs(weather) >= 0.05 ? html`
         ${row(t("why.weather"), `${formatSigned(weather, lang)} °C`)}
         ${weatherParts.map((c) => row(t(`corr.${c.key}`).toLowerCase(), formatSigned(c.value, lang), "sub"))}` : nothing}

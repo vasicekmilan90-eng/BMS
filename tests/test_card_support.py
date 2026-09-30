@@ -62,6 +62,20 @@ async def test_sun_mode_select(hass: HomeAssistant, setup_integration: MockConfi
     assert inputs.sun_noon_elevation is not None and inputs.sun_noon_elevation > 0
 
 
+async def test_sun_forecast_split_migration(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
+    reg = _reg(setup_integration)
+    assert hass.states.get("switch.bms_slunce_predpoved") is not None
+    reg.data["settings"].pop("slunce_predpoved", None)
+    reg.data["settings"]["pouziti_predpovedi"] = True
+    reg.data["profiles"]["Zima"]["settings"] = {"pouziti_predpovedi": True}
+    reg._migrate_sun_forecast()
+    assert reg.settings["slunce_predpoved"] is True
+    assert reg.data["profiles"]["Zima"]["settings"]["slunce_predpoved"] is True
+    # křivka a slunce už na sobě nezávisí
+    reg.async_set_setting("pouziti_predpovedi", False)
+    assert reg.settings["slunce_predpoved"] is True
+
+
 async def test_boost_records_start_and_duration(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
     reg = _reg(setup_integration)
     await hass.services.async_call(DOMAIN, "activate_boost", {"amount": 2, "hours": 1.5}, blocking=True)

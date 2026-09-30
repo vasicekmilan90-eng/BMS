@@ -225,7 +225,7 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     const t = this.t;
     const mode = this.sunMode;
     const factor = Number(snap.result?.sun_factor ?? snap.values.sun_factor ?? 0);
-    const useFc = this.on("pouziti_predpovedi");
+    const useFc = this.on("slunce_predpoved");
     const when = useFc ? t("influences.in_hours", { hours: this.num("slunce_predpoved_hodin") }) : t("influences.now");
     const where = factor > 0 ? t(`sun.in.${mode}`, { pct: Math.round(factor * 100) }) : t(`sun.out.${mode}`);
     return this.row("slunce", "mdi:weather-sunny", t("influences.sun"), `${t(`sun.mode.${mode}`)} · ${where} · ${when}`);
@@ -353,7 +353,7 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
           <bms-number .ctx=${this.ctx} key="slunce_max_eff" label=${t("influences.max")}></bms-number>
         </div>
         <div>
-          <bms-toggle .ctx=${this.ctx} key="pouziti_predpovedi" label=${t("influences.use_forecast_sun")}></bms-toggle>
+          <bms-toggle .ctx=${this.ctx} key="slunce_predpoved" label=${t("influences.use_forecast")} name=${t("influences.sun")}></bms-toggle>
           <bms-number .ctx=${this.ctx} key="slunce_predpoved_hodin" label=${t("influences.horizon")}></bms-number>
         </div>
       </div>

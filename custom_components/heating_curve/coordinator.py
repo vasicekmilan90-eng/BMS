@@ -162,6 +162,22 @@ class BMSRegulator:
                     continue
         if len(self.data["curve"]) < 2:
             self.data["curve"] = [dict(p) for p in DEFAULT_SEASONAL_PROFILES["Jaro/Podzim"]]
+        self._migrate_sun_forecast()
+
+    def _migrate_sun_forecast(self) -> None:
+        """0.4: slunce má vlastní přepínač předpovědi — převezme dosavadní společný (křivka i slunce)."""
+        changed = False
+        stored = self.data["settings"]
+        if "slunce_predpoved" not in stored and "pouziti_predpovedi" in stored:
+            stored["slunce_predpoved"] = self.settings["slunce_predpoved"] = bool(stored["pouziti_predpovedi"])
+            changed = True
+        for profile in self.data["profiles"].values():
+            settings = profile.get("settings", {})
+            if "slunce_predpoved" not in settings and "pouziti_predpovedi" in settings:
+                settings["slunce_predpoved"] = bool(settings["pouziti_predpovedi"])
+                changed = True
+        if changed:
+            self.store.async_delay_save()
 
     async def async_start(self) -> None:
         """Spustí sledování a první výpočet (po startu HA, kdy existují všechny entity)."""
@@ -473,8 +489,12 @@ class BMSRegulator:
         actual_el, actual_az = self._sun_position(now)
         sun_fc_when = now + timedelta(hours=float(s["slunce_predpoved_hodin"]))
         fc_el, fc_az = self._sun_position(sun_fc_when)
-        use_sun_fc = bool(s["pouziti_predpovedi"])
+        use_sun_fc = bool(s["slunce_predpoved"])
         sun_el, sun_az = (fc_el, fc_az) if use_sun_fc else (actual_el, actual_az)
+        # oblačnost pro slunce ze stejného okamžiku jako poloha slunce
+        sun_clouds = forecast_value(s["slunce_predpoved_hodin"], "clouds") if use_sun_fc else None
+        if sun_clouds is None:
+            sun_clouds = actual["clouds"]
 
         inputs = calc.CalcInput(
             outdoor=outdoor,
@@ -491,6 +511,7 @@ class BMSRegulator:
             curve=self.curve_points,
             settings=s,
             sun_noon_elevation=self._sun_noon_elevation(sun_fc_when if use_sun_fc else now),
+            sun_clouds=sun_clouds,
         )
         extra = {
             "source": source,

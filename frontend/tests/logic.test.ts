@@ -4,7 +4,7 @@ import cs from "../src/translations/cs.json";
 import en from "../src/translations/en.json";
 import { createTranslator, formatSigned, resolveLanguage } from "../src/i18n";
 import {
-  alerts, boostProgress, breakdown, corrections, curveSlope, daysInMonth, describeLogEntry, describeRule, extendBoost,
+  alerts, boostProgress, breakdown, corrections, curveInput, curveSlope, daysInMonth, describeLogEntry, describeRule, extendBoost,
   formatDuration, groupLogByDay, interpolate, isWrite, parseMmdd, reasonSentence, regulationState, remainingMinutes,
   shiftCurve, slopeCurve, suggestPoint, sunCoverage, toMmdd, userEvents, validatePoints, validateRule, yearSegments,
 } from "../src/logic";
@@ -148,6 +148,15 @@ describe("texty", () => {
     ];
     expect(entries.filter(isWrite).length).toBe(2);
     expect(groupLogByDay(entries, "cs").map((g) => g.entries.length)).toEqual([2, 1]);
+  });
+  it("křivka z předpovědi není hodnota senzoru", () => {
+    const values = { applied_out_temp: 14.9, raw_outdoor_temp: 21, forecast_temp: 14.9 };
+    const withFc = snap({ values, settings: { hlavni_vypinac: true, pouziti_predpovedi: true, predpoved_hodin: 24 } });
+    expect(curveInput(withFc)).toEqual({ value: 14.9, forecast: true, hours: 24 });
+    expect(sectionSummary("curve", withFc, t, "cs", 0)).toBe("předpověď 14,9 °C za 24 h → 45 °C");
+    const noFc = snap({ values: { ...values, applied_out_temp: 21 }, settings: { hlavni_vypinac: true, pouziti_predpovedi: false } });
+    expect(curveInput(noFc).forecast).toBe(false);
+    expect(sectionSummary("curve", noFc, t, "cs", 0)).toBe("21,0 °C venku → 45 °C");
   });
   it("souhrny sekcí", () => {
     expect(sectionSummary("profiles", snap({ profile_modified: true }), t, "cs", 0)).toBe("Výchozí (upraveno)");

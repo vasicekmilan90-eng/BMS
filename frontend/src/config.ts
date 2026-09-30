@@ -14,7 +14,8 @@ export const PROFILE_ACTIONS = ["load", "save", "rename", "delete", "star", "tra
 export const CURVE_SERIES = ["modified", "result", "limits", "safe_point", "current"] as const;
 export const CURVE_EDITORS = ["none", "shift", "points", "full"] as const;
 export const INFLUENCE_ITEMS = ["vitr", "srazky", "vlhkost", "oblacnost", "slunce"] as const;
-export const SETTINGS_GROUPS = ["limits", "fallback", "temporary", "forecast", "recalc"] as const;
+/** Předpověď pro křivku se od 0.4 nastavuje přímo u křivky; starší skupina „forecast“ se tiše vynechá. */
+export const SETTINGS_GROUPS = ["limits", "fallback", "temporary", "recalc"] as const;
 export const LAYOUTS = ["auto", "single", "columns"] as const;
 export const PRESETS = ["family", "technician", "mobile", "overview"] as const;
 /** Staré názvy režimů (0.2) → nové sekce. */

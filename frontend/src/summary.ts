@@ -2,7 +2,7 @@
 
 import type { SectionId } from "./config.js";
 import { formatNumber, formatSigned, formatTemp, type Translator } from "./i18n.js";
-import { describeLogEntry, formatDuration, remainingMinutes, weatherCorrection } from "./logic.js";
+import { curveInput, describeLogEntry, formatDuration, remainingMinutes, weatherCorrection } from "./logic.js";
 import type { Snapshot } from "./types.js";
 
 export function sectionSummary(id: SectionId, snap: Snapshot, t: Translator, lang: string, nowSec: number): string {
@@ -32,10 +32,12 @@ export function sectionSummary(id: SectionId, snap: Snapshot, t: Translator, lan
       ].filter(Boolean);
       return active.length ? t("summary.active_now", { list: active.join(", ") }) : t("summary.none_active");
     }
-    case "curve":
-      return t("summary.curve", {
-        out: formatNumber(snap.values.applied_out_temp, lang), flow: formatNumber(r?.curve_temp, lang, 0),
+    case "curve": {
+      const input = curveInput(snap);
+      return t(input.forecast ? "summary.curve_forecast" : "summary.curve", {
+        out: formatNumber(input.value, lang), flow: formatNumber(r?.curve_temp, lang, 0), hours: input.hours,
       });
+    }
     case "influences":
       return t("summary.influences", { value: formatSigned(weatherCorrection(r), lang) });
     case "log": {
