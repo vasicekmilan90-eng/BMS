@@ -125,9 +125,9 @@
       "slunce_predpoved_hodin": { "name": "Slunce: Výhled předpovědi" },
       "frost_threshold": { "name": "Protimraz: Práh teploty" },
       "frost_min_heat": { "name": "Protimraz: Min. topení" },
-      "night_offset": { "name": "Noční mód: Posun křivky" },
-      "day_start": { "name": "Noční mód: Začátek dne" },
-      "day_end": { "name": "Noční mód: Konec dne" },
+      "night_offset": { "name": "Noční režim: Změna teploty" },
+      "day_start": { "name": "Noční režim: Konec noci" },
+      "day_end": { "name": "Noční režim: Začátek noci" },
       "boost_amount": { "name": "Boost: Přídavek" },
       "boost_hours": { "name": "Boost: Trvání" },
       "reduction_amount": { "name": "Útlum: Snížení" },
@@ -163,7 +163,7 @@
       "vliv_oblacnost": { "name": "Vliv: Oblačnost" },
       "vliv_slunce": { "name": "Vliv: Pozice slunce" },
       "frost_protection": { "name": "Protimrazová ochrana" },
-      "night_mode": { "name": "Noční mód" },
+      "night_mode": { "name": "Noční režim" },
       "letni_bypass": { "name": "Letní bypass" },
       "vitr_predpoved": { "name": "Vítr: Použít předpověď" },
       "srazky_predpoved": { "name": "Srážky: Použít předpověď" },
@@ -227,7 +227,7 @@
   "services": {
     "save_profile": {
       "name": "Uložit profil",
-      "description": "Uloží aktuální nastavení sezónních entit (křivka, vlivy, noční mód, protimraz, boost) jako pojmenovaný profil. Nastavení integrace (limity, interval přepočtu, bypass) se do profilu neukládají.",
+      "description": "Uloží aktuální nastavení sezónních entit (křivka, vlivy, noční režim, protimraz, boost) jako pojmenovaný profil. Nastavení integrace (limity, interval přepočtu, bypass) se do profilu neukládají.",
       "fields": {
         "name": {
           "name": "Název",

@@ -131,6 +131,12 @@ def test_compute_night_and_frost() -> None:
     assert result.result == 35
 
 
+def test_compute_night_positive_offset() -> None:
+    result = calc.compute(_inp(outdoor=20, raw_outdoor=20, hour=2, settings={"night_offset": 3, "limit_min": 10}))
+    assert result.night_active and result.night_offset == 3
+    assert result.raw == pytest.approx(result.curve_temp + 3)
+
+
 def test_compute_safe_mode_uses_safe_point() -> None:
     result = calc.compute(_inp(safe_mode=True, settings={"safe_curve_temp": 38}))
     assert result.result == 38 and result.safe_mode

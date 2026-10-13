@@ -10,7 +10,7 @@ type Item = SectionOptions["automations"]["items"][number];
 
 const META: Record<Item, { icon: string; toggle: string; tone: string; numbers: string[] }> = {
   frost: { icon: "mdi:snowflake-alert", toggle: "frost_protection", tone: "frost", numbers: ["frost_threshold", "frost_min_heat"] },
-  night: { icon: "mdi:weather-night", toggle: "night_mode", tone: "night", numbers: ["night_offset", "day_start", "day_end"] },
+  night: { icon: "mdi:weather-night", toggle: "night_mode", tone: "night", numbers: ["night_offset", "day_end", "day_start"] },
   bypass: { icon: "mdi:weather-sunny-off", toggle: "letni_bypass", tone: "warn", numbers: ["letni_bypass_temp"] },
 };
 
@@ -35,7 +35,7 @@ export class BmsAutomationsSection extends BmsSection<SectionOptions["automation
         });
       case "night":
         return t("auto.night_desc", {
-          start: this.num("day_end"), end: this.num("day_start"), offset: formatSigned(this.num("night_offset"), lang, 0),
+          start: this.num("day_end"), end: this.num("day_start"), offset: formatSigned(this.num("night_offset"), lang),
         });
       case "bypass":
         return t("auto.bypass_desc", { temp: formatNumber(this.num("letni_bypass_temp"), lang, 0) });
@@ -86,6 +86,7 @@ export class BmsAutomationsSection extends BmsSection<SectionOptions["automation
           ${item === "night" ? this.dayBar() : nothing}
           <div class="controls">${meta.numbers.map((key) =>
             html`<bms-number .ctx=${this.ctx} key=${key} label=${t(`setting.${key}`)}></bms-number>`)}</div>
+          ${item === "night" ? html`<div class="small muted">${t("auto.night_hint")}</div>` : nothing}
         </div>` : nothing}`;
       })}
       ${canEdit ? html`<div class="footer">
