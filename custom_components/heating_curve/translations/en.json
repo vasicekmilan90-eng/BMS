@@ -61,20 +61,20 @@
           "limit_max": "Thermostat limit: maximum",
           "safe_temp": "Safe outdoor temperature",
           "safe_curve_temp": "Heating when the outdoor temperature is unavailable",
-          "prepocet_rezim": "When to set the thermostat",
-          "prepocet_interval": "Recalculation interval",
-          "prepocet_delta": "Outdoor temperature change for recalculation",
-          "pouziti_predpovedi": "Curve from temperature forecast",
-          "predpoved_hodin": "Curve: forecast horizon",
-          "slunce_rezim": "Sun influence: calculation mode",
-          "slunce_orientace": "Sun influence: window direction (azimuth)",
-          "slunce_predpoved": "Sun influence: use the sun position after the horizon",
-          "slunce_predpoved_hodin": "Sun influence: horizon"
+          "recalc_mode": "When to set the thermostat",
+          "recalc_interval": "Recalculation interval",
+          "recalc_delta": "Outdoor temperature change for recalculation",
+          "curve_forecast": "Curve from temperature forecast",
+          "curve_forecast_hours": "Curve: forecast horizon",
+          "sun_mode": "Sun influence: calculation mode",
+          "sun_orientation": "Sun influence: window direction (azimuth)",
+          "sun_forecast": "Sun influence: use the sun position after the horizon",
+          "sun_forecast_hours": "Sun influence: horizon"
         },
         "data_description": {
-          "predpoved_hodin": "The curve uses the forecast outdoor temperature this many hours ahead. Matches the building's thermal inertia, usually 2–6 h.",
-          "slunce_rezim": "Fixed window = only between the solar window azimuths (shifts against sunrise and sunset during the year). Window direction = by the angle of incidence on the windows. Whole day = the whole time above the horizon, relative to today's noon.",
-          "slunce_orientace": "Used in the Window direction mode: 90° = east, 180° = south, 270° = west."
+          "curve_forecast_hours": "The curve uses the forecast outdoor temperature this many hours ahead. Matches the building's thermal inertia, usually 2–6 h.",
+          "sun_mode": "Fixed window = only between the solar window azimuths (shifts against sunrise and sunset during the year). Window direction = by the angle of incidence on the windows. Whole day = the whole time above the horizon, relative to today's noon.",
+          "sun_orientation": "Used in the Window direction mode: 90° = east, 180° = south, 270° = west."
         }
       }
     },
@@ -83,18 +83,18 @@
     }
   },
   "selector": {
-    "prepocet_rezim": {
+    "recalc_mode": {
       "options": {
-        "cas": "On interval",
-        "teplota": "On outdoor temperature change",
-        "oboji": "Interval and temperature change"
+        "time": "On interval",
+        "temperature": "On outdoor temperature change",
+        "both": "Interval and temperature change"
       }
     },
-    "slunce_rezim": {
+    "sun_mode": {
       "options": {
-        "okno": "Fixed azimuth window",
-        "fasada": "By window direction",
-        "nad_obzorem": "Whole day above horizon"
+        "window": "Fixed azimuth window",
+        "facade": "By window direction",
+        "daylight": "Whole day above horizon"
       }
     }
   },
@@ -133,16 +133,16 @@
     },
     "number": {
       "safe_temp": { "name": "Safe outdoor temperature" },
-      "rozsah_venku_min": { "name": "Outdoor range: Min" },
-      "rozsah_venku_max": { "name": "Outdoor range: Max" },
+      "outdoor_range_min": { "name": "Outdoor range: Min" },
+      "outdoor_range_max": { "name": "Outdoor range: Max" },
       "limit_min": { "name": "Thermostat limit: Min" },
       "limit_max": { "name": "Thermostat limit: Max" },
-      "predpoved_hodin": { "name": "Curve: Forecast horizon" },
-      "vitr_predpoved_hodin": { "name": "Wind: Forecast horizon" },
-      "srazky_predpoved_hodin": { "name": "Precipitation: Forecast horizon" },
-      "vlhkost_predpoved_hodin": { "name": "Humidity: Forecast horizon" },
-      "oblacnost_predpoved_hodin": { "name": "Clouds: Forecast horizon" },
-      "slunce_predpoved_hodin": { "name": "Sun: Forecast horizon" },
+      "curve_forecast_hours": { "name": "Curve: Forecast horizon" },
+      "wind_forecast_hours": { "name": "Wind: Forecast horizon" },
+      "rain_forecast_hours": { "name": "Precipitation: Forecast horizon" },
+      "humidity_forecast_hours": { "name": "Humidity: Forecast horizon" },
+      "clouds_forecast_hours": { "name": "Clouds: Forecast horizon" },
+      "sun_forecast_hours": { "name": "Sun: Forecast horizon" },
       "frost_threshold": { "name": "Frost protection: Threshold" },
       "frost_min_heat": { "name": "Frost protection: Min heating" },
       "night_offset": { "name": "Night mode: Temperature change" },
@@ -153,61 +153,61 @@
       "boost_hours": { "name": "Boost: Duration" },
       "reduction_amount": { "name": "Reduction: Amount" },
       "reduction_hours": { "name": "Reduction: Duration" },
-      "vitr_od": { "name": "Wind: Effect from" },
-      "vitr_do": { "name": "Wind: Full effect at" },
-      "vitr_max_eff": { "name": "Wind: Max correction" },
-      "srazky_od": { "name": "Precipitation: Effect from" },
-      "srazky_do": { "name": "Precipitation: Full effect at" },
-      "srazky_max_eff": { "name": "Precipitation: Max correction" },
-      "vlhkost_od": { "name": "Humidity: Effect from" },
-      "vlhkost_do": { "name": "Humidity: Full effect at" },
-      "vlhkost_max_eff": { "name": "Humidity: Max correction" },
-      "oblacnost_od": { "name": "Clouds: Effect from" },
-      "oblacnost_do": { "name": "Clouds: Full effect at" },
-      "oblacnost_max_eff": { "name": "Clouds: Max correction" },
-      "solarni_start": { "name": "Solar window: Start" },
-      "solarni_konec": { "name": "Solar window: End" },
-      "slunce_orientace": { "name": "Sun: Window direction" },
-      "slunce_max_eff": { "name": "Sun: Max correction" },
-      "prepocet_interval": { "name": "Recalculation: Interval" },
-      "prepocet_delta": { "name": "Recalculation: Temperature change" },
-      "letni_bypass_temp": { "name": "Summer bypass: Temperature" },
+      "wind_from": { "name": "Wind: Effect from" },
+      "wind_to": { "name": "Wind: Full effect at" },
+      "wind_max_effect": { "name": "Wind: Max correction" },
+      "rain_from": { "name": "Precipitation: Effect from" },
+      "rain_to": { "name": "Precipitation: Full effect at" },
+      "rain_max_effect": { "name": "Precipitation: Max correction" },
+      "humidity_from": { "name": "Humidity: Effect from" },
+      "humidity_to": { "name": "Humidity: Full effect at" },
+      "humidity_max_effect": { "name": "Humidity: Max correction" },
+      "clouds_from": { "name": "Clouds: Effect from" },
+      "clouds_to": { "name": "Clouds: Full effect at" },
+      "clouds_max_effect": { "name": "Clouds: Max correction" },
+      "solar_window_start": { "name": "Solar window: Start" },
+      "solar_window_end": { "name": "Solar window: End" },
+      "sun_orientation": { "name": "Sun: Window direction" },
+      "sun_max_effect": { "name": "Sun: Max correction" },
+      "recalc_interval": { "name": "Recalculation: Interval" },
+      "recalc_delta": { "name": "Recalculation: Temperature change" },
+      "summer_bypass_temp": { "name": "Summer bypass: Temperature" },
       "safe_curve_outdoor": { "name": "Safe point: Outdoor" },
       "safe_curve_temp": { "name": "Safe point: Heating" }
     },
     "switch": {
-      "hlavni_vypinac": { "name": "Main switch" },
-      "pouziti_predpovedi": { "name": "Curve: Use forecast" },
-      "vliv_vitr": { "name": "Influence: Wind" },
-      "vliv_srazky": { "name": "Influence: Precipitation" },
-      "vliv_vlhkost": { "name": "Influence: Humidity" },
-      "vliv_oblacnost": { "name": "Influence: Clouds" },
-      "vliv_slunce": { "name": "Influence: Sun position" },
+      "main_switch": { "name": "Main switch" },
+      "curve_forecast": { "name": "Curve: Use forecast" },
+      "influence_wind": { "name": "Influence: Wind" },
+      "influence_rain": { "name": "Influence: Precipitation" },
+      "influence_humidity": { "name": "Influence: Humidity" },
+      "influence_clouds": { "name": "Influence: Clouds" },
+      "influence_sun": { "name": "Influence: Sun position" },
       "frost_protection": { "name": "Frost protection" },
       "night_mode": { "name": "Night mode" },
-      "letni_bypass": { "name": "Summer bypass" },
-      "vitr_predpoved": { "name": "Wind: Use forecast" },
-      "srazky_predpoved": { "name": "Precipitation: Use forecast" },
-      "vlhkost_predpoved": { "name": "Humidity: Use forecast" },
-      "oblacnost_predpoved": { "name": "Clouds: Use forecast" },
-      "slunce_predpoved": { "name": "Sun: Use forecast" }
+      "summer_bypass": { "name": "Summer bypass" },
+      "wind_forecast": { "name": "Wind: Use forecast" },
+      "rain_forecast": { "name": "Precipitation: Use forecast" },
+      "humidity_forecast": { "name": "Humidity: Use forecast" },
+      "clouds_forecast": { "name": "Clouds: Use forecast" },
+      "sun_forecast": { "name": "Sun: Use forecast" }
     },
     "select": {
-      "profil_krivky": { "name": "Curve profile" },
-      "prepocet_rezim": {
+      "curve_profile": { "name": "Curve profile" },
+      "recalc_mode": {
         "name": "Recalculation: Mode",
         "state": {
-          "cas": "By time",
-          "teplota": "By temperature change",
-          "oboji": "Time and temperature"
+          "time": "By time",
+          "temperature": "By temperature change",
+          "both": "Time and temperature"
         }
       },
-      "slunce_rezim": {
+      "sun_mode": {
         "name": "Sun: Mode",
         "state": {
-          "okno": "Fixed azimuth window",
-          "fasada": "By window direction",
-          "nad_obzorem": "Whole day above horizon"
+          "window": "Fixed azimuth window",
+          "facade": "By window direction",
+          "daylight": "Whole day above horizon"
         }
       }
     },

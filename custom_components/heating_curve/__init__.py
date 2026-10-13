@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -11,9 +12,10 @@ import voluptuous as vol
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
+from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
@@ -31,6 +33,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import BMSRegulator
+from .settings import LEGACY_KEYS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -116,13 +119,29 @@ async def async_unload_entry(hass: HomeAssistant, entry: HeatingCurveConfigEntry
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """1.1 → 1.2: poloha slunce se počítá z polohy HA, entita slunce už není potřeba."""
+    """1.2: entita slunce už není potřeba. 1.3: entity mají anglické klíče."""
     if entry.version > 1:
         return False
     if entry.minor_version < 2:
         data = {k: v for k, v in entry.data.items() if k != CONF_SUN}
         hass.config_entries.async_update_entry(entry, data=data, minor_version=2)
+    if entry.minor_version < 3:
+        await er.async_migrate_entries(hass, entry.entry_id, partial(_rename_entity, entry.entry_id))
+        hass.config_entries.async_update_entry(entry, minor_version=3)
     return True
+
+
+@callback
+def _rename_entity(entry_id: str, reg: er.RegistryEntry) -> dict[str, Any] | None:
+    keys = {**LEGACY_KEYS, "profil_krivky": "curve_profile"}
+    updates: dict[str, Any] = {}
+    prefix = f"{entry_id}_"
+    if reg.unique_id.startswith(prefix) and (new := keys.get(reg.unique_id.removeprefix(prefix))):
+        updates["new_unique_id"] = f"{prefix}{new}"
+    domain, _, object_id = reg.entity_id.partition(".")
+    if object_id.startswith("bms_") and (new := keys.get(object_id.removeprefix("bms_"))):
+        updates["new_entity_id"] = f"{domain}.bms_{new}"
+    return updates or None
 
 
 # ── Služby ─────────────────────────────────────────────────────────────────────

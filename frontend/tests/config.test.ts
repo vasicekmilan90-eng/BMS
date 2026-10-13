@@ -34,6 +34,8 @@ describe("konfigurace", () => {
     expect(log.type === "log" && [log.limit, log.filter]).toEqual([20, "writes"]);
     const settings = normalizeConfig({ type: "x", sections: [{ type: "settings", groups: ["limits", "forecast"] }] }).sections[0];
     expect(settings.type === "settings" && settings.groups).toEqual(["limits"]);
+    const influences = normalizeConfig({ type: "x", sections: [{ type: "influences", items: ["vitr", "slunce", "rain"] }] }).sections[0];
+    expect(influences.type === "influences" && influences.items).toEqual(["wind", "sun", "rain"]);
   });
 
   it("převod zápisu z 0.2", () => {

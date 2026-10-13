@@ -13,7 +13,7 @@ from .coordinator import BMSRegulator
 from .entity import BMSEntity
 from .settings import SWITCH_SETTINGS, SwitchSetting
 
-_PRIMARY = {"hlavni_vypinac"}
+_PRIMARY = {"main_switch"}
 
 
 async def async_setup_entry(

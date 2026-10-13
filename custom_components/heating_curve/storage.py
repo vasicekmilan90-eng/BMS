@@ -18,9 +18,10 @@ from .const import (
     LEGACY_CURVE_KEY,
     LEGACY_PROFILES_KEY,
     STORE_KEY,
+    STORE_MINOR_VERSION,
     STORE_VERSION,
 )
-from .settings import PROFILE_KEYS, coerce_setting, legacy_key
+from .settings import PROFILE_KEYS, coerce_setting, legacy_key, migrate_settings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,12 +64,24 @@ def migrate_legacy_profile(raw: dict[str, Any]) -> dict[str, Any]:
     return {"settings": settings, "curve": [{"x": float(p["x"]), "y": float(p["y"])} for p in curve]}
 
 
+class _Store(Store[dict[str, Any]]):
+    async def _async_migrate_func(
+        self, old_major_version: int, old_minor_version: int, old_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        if old_minor_version < 2:  # 0.6: anglické klíče nastavení
+            old_data["settings"] = migrate_settings(old_data.get("settings") or {})
+            for profile in (old_data.get("profiles") or {}).values():
+                if isinstance(profile, dict):
+                    profile["settings"] = migrate_settings(profile.get("settings") or {})
+        return old_data
+
+
 class BMSStore:
     """Jeden JSON soubor `.storage/heating_curve.data`, se zpětnou migrací ze starých souborů."""
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
-        self._store: Store[dict[str, Any]] = Store(hass, STORE_VERSION, STORE_KEY)
+        self._store = _Store(hass, STORE_VERSION, STORE_KEY, minor_version=STORE_MINOR_VERSION)
         self.data: dict[str, Any] = _empty_data()
         self.ok = True
 

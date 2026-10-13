@@ -12,6 +12,7 @@ from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
 from homeassistant.core import HomeAssistant, State
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
@@ -47,14 +48,14 @@ async def test_setup_entities_and_card(hass: HomeAssistant, setup_integration: M
     entry = setup_integration
     assert entry.state is ConfigEntryState.LOADED
     assert mock_frontend.call_args[0][1].startswith("/heating_curve/bms-master-card.js?v=")
-    for entity_id in ("number.bms_limit_min", "switch.bms_hlavni_vypinac", "select.bms_profil_krivky",
-                      "select.bms_prepocet_rezim", "sensor.bms_calc_temp", "sensor.bms_influences_log",
+    for entity_id in ("number.bms_limit_min", "switch.bms_main_switch", "select.bms_curve_profile",
+                      "select.bms_recalc_mode", "sensor.bms_calc_temp", "sensor.bms_influences_log",
                       "binary_sensor.bms_problem", "sensor.bms_actual_wind"):
         assert hass.states.get(entity_id) is not None, entity_id
     calc_state = hass.states.get("sensor.bms_calc_temp")
     assert calc_state.state == "42.0"  # křivka 3.5 °C → ~41 + korekce, limit 42
-    assert calc_state.attributes["friendly_name"] == "BMS Regulátor Resulting temperature"  # testy běží v en
-    assert hass.states.get("select.bms_profil_krivky").attributes["options"][:1] == ["Výchozí"]
+    assert calc_state.attributes["friendly_name"] == "BMS Resulting temperature"  # testy běží v en
+    assert hass.states.get("select.bms_curve_profile").attributes["options"][:1] == ["Výchozí"]
     assert hass.states.get("number.bms_limit_min").attributes["unit_of_measurement"] == "°C"
 
 
@@ -63,7 +64,7 @@ async def test_thermostat_write_step_and_unchanged(
 ) -> None:
     assert thermostat_calls == []  # hlavní vypínač je ve výchozím stavu vypnutý
     await _set(hass, "number", "limit_max", 60)
-    await _set(hass, "switch", "hlavni_vypinac", True)
+    await _set(hass, "switch", "main_switch", True)
     resp = await hass.services.async_call(DOMAIN, "force_refresh", {}, blocking=True, return_response=True)
     assert resp["status"] == "ok"
     assert len(thermostat_calls) == 1
@@ -87,8 +88,8 @@ async def test_temperature_mode_hysteresis(
     hass: HomeAssistant, setup_integration: MockConfigEntry, thermostat_calls: list,
 ) -> None:
     await _set(hass, "number", "limit_max", 90)
-    await _set(hass, "select", "prepocet_rezim", "teplota")
-    await _set(hass, "switch", "hlavni_vypinac", True)
+    await _set(hass, "select", "recalc_mode", "temperature")
+    await _set(hass, "switch", "main_switch", True)
     hass.states.async_set("climate.kotel", "heat", {"temperature": None, "target_temp_step": 0.5})
     await hass.services.async_call(DOMAIN, "force_refresh", {}, blocking=True)
     calls = len(thermostat_calls)
@@ -121,8 +122,8 @@ async def test_per_influence_forecast_and_units(
     for hour in (3, 4):  # nejbližší bod k +3 h podle aktuální minuty
         points[hour] = {**points[hour], "wind_speed": 20}   # 72 km/h
     weather.set_hourly(points)
-    await _set(hass, "number", "vitr_predpoved_hodin", 3)
-    await _set(hass, "switch", "vitr_predpoved", True)
+    await _set(hass, "number", "wind_forecast_hours", 3)
+    await _set(hass, "switch", "wind_forecast", True)
     await hass.services.async_call(DOMAIN, "force_refresh", {}, blocking=True)
     assert reg.values["forecast_wind"] == pytest.approx(72.0)
     assert reg.result.corr_wind == pytest.approx(5.0)  # plný účinek, jen díky předpovědi +3 h
@@ -138,8 +139,8 @@ async def test_night_forecast_extension(
     for hour in (6, 7):  # nejbližší bod k +3 h a nočním +3 h
         points[hour] = {**points[hour], "wind_speed": 20}
     weather.set_hourly(points)
-    await _set(hass, "number", "vitr_predpoved_hodin", 3)
-    await _set(hass, "switch", "vitr_predpoved", True)
+    await _set(hass, "number", "wind_forecast_hours", 3)
+    await _set(hass, "switch", "wind_forecast", True)
     await _set(hass, "number", "night_forecast_extra", 3)
     await _set(hass, "number", "day_start", 0)
     await _set(hass, "number", "day_end", 0)  # den nulové délky = celý den noc
@@ -176,14 +177,14 @@ async def test_profiles(hass: HomeAssistant, setup_integration: MockConfigEntry)
     reg = _reg(setup_integration)
     await _set(hass, "number", "night_offset", -3)
     await hass.services.async_call(DOMAIN, "save_profile", {"name": "Test"}, blocking=True)
-    assert "Test" in hass.states.get("select.bms_profil_krivky").attributes["options"]
+    assert "Test" in hass.states.get("select.bms_curve_profile").attributes["options"]
 
     await hass.services.async_call(DOMAIN, "load_profile", {"name": "Zima"}, blocking=True)
-    assert hass.states.get("select.bms_profil_krivky").state == "Zima"
+    assert hass.states.get("select.bms_curve_profile").state == "Zima"
     assert reg.data["curve"][0]["y"] == 75
 
     await _set(hass, "number", "night_offset", -8)
-    await _set(hass, "select", "profil_krivky", "Test")
+    await _set(hass, "select", "curve_profile", "Test")
     assert hass.states.get("number.bms_night_offset").state == "-3.0"
 
     with pytest.raises(ServiceValidationError):
@@ -192,10 +193,10 @@ async def test_profiles(hass: HomeAssistant, setup_integration: MockConfigEntry)
     await hass.services.async_call(DOMAIN, "set_starred", {"starred": ["Test", "Neexistuje"]}, blocking=True)
     assert reg.data["starred"] == ["Test"]
     await hass.services.async_call(DOMAIN, "rename_profile", {"name": "Test", "new_name": "Test2"}, blocking=True)
-    assert hass.states.get("select.bms_profil_krivky").state == "Test2"
+    assert hass.states.get("select.bms_curve_profile").state == "Test2"
     assert reg.data["starred"] == ["Test2"]
     await hass.services.async_call(DOMAIN, "delete_profile", {"name": "Test2"}, blocking=True)
-    assert hass.states.get("select.bms_profil_krivky").state == "Výchozí"
+    assert hass.states.get("select.bms_curve_profile").state == "Výchozí"
     assert reg.data["starred"] == []
 
 
@@ -205,12 +206,12 @@ async def test_schedule_respects_manual_choice(hass: HomeAssistant, setup_integr
         "type": "date", "profile": "Zima", "date_from": today, "date_to": today,
     }, blocking=True)
     await hass.async_block_till_done()
-    assert hass.states.get("select.bms_profil_krivky").state == "Zima"
+    assert hass.states.get("select.bms_curve_profile").state == "Zima"
 
     await hass.services.async_call(DOMAIN, "load_profile", {"name": "Léto"}, blocking=True)
     await hass.services.async_call(DOMAIN, "force_refresh", {}, blocking=True)
     await hass.async_block_till_done()
-    assert hass.states.get("select.bms_profil_krivky").state == "Léto"
+    assert hass.states.get("select.bms_curve_profile").state == "Léto"
 
 
 async def test_curve_services(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
@@ -295,12 +296,41 @@ async def test_legacy_migration(
     await hass.async_block_till_done()
 
     reg = entry.runtime_data
-    assert "sun_entity" not in entry.data and entry.minor_version == 2
-    assert reg.data["profiles"]["Moje"]["settings"] == {"night_offset": -2.5, "vliv_vitr": False}
+    assert "sun_entity" not in entry.data and entry.minor_version == 3
+    assert reg.data["profiles"]["Moje"]["settings"] == {"night_offset": -2.5, "influence_wind": False}
     assert reg.data["curve"][0] == {"x": -15.0, "y": 65.0}
-    assert hass.states.get("select.bms_profil_krivky").state == "Moje"
+    assert hass.states.get("select.bms_curve_profile").state == "Moje"
     assert reg.settings["limit_min"] == 31.5  # z obnoveného stavu entity
     assert reg.data["starred"] == ["Moje"]
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_migrate_czech_keys(hass: HomeAssistant, hass_storage: dict[str, Any], weather: WeatherMock) -> None:
+    hass_storage["heating_curve.data"] = {"version": 1, "minor_version": 1, "key": "heating_curve.data", "data": {
+        "settings": {"hlavni_vypinac": False, "prepocet_rezim": "oboji", "slunce_rezim": "fasada", "vitr_do": 70},
+        "profiles": {"Moje": {"settings": {"vitr_od": 15, "vliv_slunce": False}, "curve": []}},
+    }}
+    set_inputs(hass)
+    entry = MockConfigEntry(domain=DOMAIN, data=DATA, title="BMS", version=1, minor_version=2)
+    entry.add_to_hass(hass)
+    ent_reg = er.async_get(hass)
+    old = ent_reg.async_get_or_create("switch", DOMAIN, f"{entry.entry_id}_hlavni_vypinac",
+                                      suggested_object_id="bms_hlavni_vypinac", config_entry=entry)
+    profile = ent_reg.async_get_or_create("select", DOMAIN, f"{entry.entry_id}_profile_select",
+                                          suggested_object_id="bms_profil_krivky", config_entry=entry)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    reg = entry.runtime_data
+    assert entry.minor_version == 3
+    assert ent_reg.async_get(old.entity_id) is None
+    assert ent_reg.async_get("switch.bms_main_switch").unique_id == f"{entry.entry_id}_main_switch"
+    assert ent_reg.async_get("select.bms_curve_profile").id == profile.id
+    assert reg.settings["recalc_mode"] == "both" and reg.settings["sun_mode"] == "facade"
+    assert reg.settings["wind_to"] == 70
+    assert reg.data["profiles"]["Moje"]["settings"] == {"wind_from": 15, "influence_sun": False}
+    assert hass.states.get("select.bms_recalc_mode").state == "both"
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
 

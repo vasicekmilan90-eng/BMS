@@ -48,7 +48,7 @@ plus smaller cards, a badge and tile features.
 
 1. In HACS, open ⋮ → *Custom repositories* and add `https://github.com/vasicekmilan90-eng/BMS`
    with the type **Integration**.
-2. Install *Chytrý ekvitermní regulátor (BMS)* and restart Home Assistant.
+2. Install *Smart Heating Curve Controller (BMS)* and restart Home Assistant.
 
 ### Manual
 
@@ -61,7 +61,7 @@ plus smaller cards, a badge and tile features.
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=heating_curve)
 
 Go to *Settings → Devices & services → Add integration* and search for
-*Chytrý ekvitermní regulátor (BMS)*. Only one instance can be configured.
+*Smart Heating Curve Controller (BMS)*. Only one instance can be configured.
 
 | Field | Required | Description |
 |---|---|---|
@@ -77,7 +77,7 @@ For each influence, the current value comes from the first available source:
 **own sensor → weather entity → nearest forecast hour**.
 
 > [!IMPORTANT]
-> The **main switch** (`switch.bms_hlavni_vypinac`) is **off** after installation. The controller
+> The **main switch** (`switch.bms_main_switch`) is **off** after installation. The controller
 > calculates and shows values, but does not set the thermostat until you turn the switch on.
 > Review the curve and the thermostat limits first.
 
@@ -106,12 +106,12 @@ using the card. All other settings are available as entities and in the card.
 5. The thermostat is set unless the main switch is off, the summer bypass is active, the thermostat is
    off, or the value has not changed.
 
-**Sun modes** (`select.bms_slunce_rezim`):
+**Sun modes** (`select.bms_sun_mode`):
 
 - *Fixed azimuth window* – effect only between two azimuths. Sunrise and sunset move during the year,
   the window does not; the card shows how much of the sunny time the window covers in winter, today
   and in summer.
-- *By window direction* – set where your windows face (`number.bms_slunce_orientace`, 180° = south).
+- *By window direction* – set where your windows face (`number.bms_sun_orientation`, 180° = south).
   The effect follows the angle of incidence and fits all year round.
 - *Whole day above horizon* – the sun counts the whole time it is above the horizon, relative to
   today's noon elevation.
@@ -174,7 +174,7 @@ sections:
     simulate: true
     range: [-20, 20]      # outdoor temperature axis (otherwise from the controller settings)
   - type: influences
-    items: [vitr, srazky, vlhkost, oblacnost, slunce]
+    items: [wind, rain, humidity, clouds, sun]
     chart: true           # "24 h chart" link
     controls: full        # values | full
   - type: log
@@ -203,16 +203,18 @@ A section can also be written by name only (`- curve`). The 0.2 syntax (`modes`,
 
 ## Entities
 
-The integration creates one device, *BMS Regulátor*. Entity IDs use the `bms_` prefix and Czech keys.
-Entity names are translated.
+The integration creates one device, *BMS*. All entity IDs start with `bms_`; entity names are translated.
+In the list below, `<influence>` is `wind`, `rain`, `humidity`, `clouds` or `sun`.
 
 | Platform | Entities |
 |---|---|
 | Sensor | `sensor.bms_calc_temp` (resulting temperature, the main output); diagnostic sensors for the applied and measured outdoor temperature, curve temperature, total correction, result after limits, current and forecast wind / precipitation / humidity / clouds / temperature, sun position, individual corrections, curve storage, outdoor temperature source, boost status, weather status and influences log |
 | Binary sensor | `binary_sensor.bms_problem` – on when control needs attention |
-| Switch | main switch (`hlavni_vypinac`), each influence on/off (`vliv_*`), use forecast for the curve (`pouziti_predpovedi`) and per influence (`*_predpoved`), frost protection, night mode, summer bypass |
-| Number | thermostat limits, outdoor range, influence ranges and maximum corrections, forecast horizons, frost protection, night mode (offset, start, end, forecast extension), boost and reduction defaults, solar window and window direction, recalculation interval and delta, summer bypass temperature, safe point |
-| Select | curve profile (`select.bms_profil_krivky`), recalculation mode, sun mode |
+| Switch | `main_switch`, `influence_<influence>`, `<influence>_forecast`, `curve_forecast`, `frost_protection`, `night_mode`, `summer_bypass` |
+| Number | `limit_min` / `limit_max`, `outdoor_range_min` / `outdoor_range_max`, `<influence>_from` / `_to` / `_max_effect` (sun: `sun_max_effect`), `<influence>_forecast_hours`, `curve_forecast_hours`, `frost_threshold`, `frost_min_heat`, `night_offset`, `day_start`, `day_end`, `night_forecast_extra`, `boost_amount` / `boost_hours`, `reduction_amount` / `reduction_hours`, `solar_window_start` / `solar_window_end`, `sun_orientation`, `recalc_interval`, `recalc_delta`, `summer_bypass_temp`, `safe_temp`, `safe_curve_outdoor`, `safe_curve_temp` |
+| Select | `curve_profile`, `recalc_mode` (`time` / `temperature` / `both`), `sun_mode` (`window` / `facade` / `daylight`) |
+
+For example, the wind forecast horizon is `number.bms_wind_forecast_hours`.
 
 Seasonal settings (curve, influences, forecasts, night mode, frost protection, boost defaults) are
 part of **profiles**. Integration settings (limits, recalculation, bypass) are not.
@@ -274,7 +276,7 @@ automation:
     actions:
       - action: number.set_value
         target:
-          entity_id: number.bms_predpoved_hodin
+          entity_id: number.bms_curve_forecast_hours
         data:
           value: 6
 ```
@@ -296,9 +298,9 @@ script:
 
 - The integration is **calculated** (`iot_class: calculated`); it does not poll devices itself.
 - Displayed values update when the input entities change.
-- The thermostat is set by the recalculation mode (`select.bms_prepocet_rezim`): every
-  `number.bms_prepocet_interval` minutes (default 30), when the outdoor temperature changes by
-  `number.bms_prepocet_delta` (default 0.5 °C), or both.
+- The thermostat is set by the recalculation mode (`select.bms_recalc_mode`): every
+  `number.bms_recalc_interval` minutes (default 30), when the outdoor temperature changes by
+  `number.bms_recalc_delta` (default 0.5 °C), or both.
 - The forecast is fetched with `weather.get_forecasts` (hourly, falling back to twice daily) and reused
   for up to 30 minutes.
 - Schedules are evaluated after every calculation. They switch the profile only when a different rule
@@ -311,7 +313,8 @@ script:
 - Schedules switch whole profiles by date or by average temperature; there are no time-of-day rules.
   Use Home Assistant automations with `number.set_value` / `switch.turn_on` for that.
 - Changing a profile setting from an automation marks the active profile as modified.
-- Entity IDs use Czech keys (e.g. `number.bms_vitr_od`) for compatibility with existing setups.
+- The built-in profile names are Czech (*Výchozí* = default, *Zima* = winter, *Jaro/Podzim* =
+  spring/autumn, *Léto* = summer). The seasonal ones can be renamed in the card.
 
 ## Troubleshooting
 
@@ -341,12 +344,21 @@ Please report issues at <https://github.com/vasicekmilan90-eng/BMS/issues>.
 Profiles, the curve and schedules stay in `<config>/.storage/heating_curve.data`, so they come back
 after reinstalling. Delete that file to start fresh. Remove any BMS cards from your dashboards.
 
-## Upgrading from a manual card setup
+## Upgrading
+
+### From 0.5 to 0.6
+
+Entity IDs and setting keys changed from Czech to English (e.g. `switch.bms_hlavni_vypinac` →
+`switch.bms_main_switch`, `number.bms_vitr_od` → `number.bms_wind_from`). Entities, stored settings and
+profiles are migrated automatically and keep their history, and card configurations with the old
+influence names (`vitr`, `srazky`, …) keep working. Update your own automations, scripts and dashboard
+cards that reference the old entity IDs.
+
+### From a manual card setup
 
 - Remove the old manual card resource (*Settings → Dashboards → ⋮ → Resources*, typically
   `/local/community/BMS/card.js`) and the old files in `www/community/BMS/`.
-- Entities (`number.bms_*`, `switch.bms_*`, `select.bms_*`, `sensor.bms_*`), profiles and the stored
-  curve stay unchanged.
+- Profiles and the stored curve stay unchanged.
 - A sun entity is no longer needed; the position is calculated from the Home Assistant location.
 - In 0.2, profiles and settings are migrated to the `heating_curve.data` storage automatically; the
   old files remain as a backup.

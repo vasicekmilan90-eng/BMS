@@ -14,8 +14,8 @@ Požadavky: Home Assistant **2026.9** nebo novější.
 ### HACS (doporučeno)
 
 1. HACS → ⋮ → *Vlastní repozitáře* → přidat `https://github.com/vasicekmilan90-eng/BMS`, typ **Integrace**.
-2. Nainstalovat *Chytrý ekvitermní regulátor (BMS)* a restartovat Home Assistant.
-3. *Nastavení → Zařízení a služby → Přidat integraci → Chytrý ekvitermní regulátor (BMS)*.
+2. Nainstalovat *Smart Heating Curve Controller (BMS)* a restartovat Home Assistant.
+3. *Nastavení → Zařízení a služby → Přidat integraci → Smart Heating Curve Controller (BMS)*.
 
    Povinný je termostat a venkovní teplotní senzor. Entita počasí je nepovinná — je zdrojem předpovědi
    a aktuálních vlivů. Pro vítr, srážky, vlhkost a oblačnost lze vybrat **vlastní senzor**; má přednost
@@ -82,7 +82,7 @@ sections:
     simulate: true
     range: [-20, 20]      # osa venkovní teploty (jinak podle nastavení regulátoru)
   - type: influences
-    items: [vitr, srazky, vlhkost, oblacnost, slunce]
+    items: [wind, rain, humidity, clouds, sun]
     chart: true           # odkaz „Graf 24 h“
     controls: full        # values | full
   - type: log
@@ -110,8 +110,8 @@ Sekce lze zapsat i jen názvem (`- curve`). Zápis z verze 0.2 (`modes`, `quick_
 
 ## Regulace
 
-- **Přepočet** (`select.bms_prepocet_rezim`): termostat se nastavuje podle intervalu, při změně venkovní
-  teploty o `number.bms_prepocet_delta`, nebo obojí. Zobrazené hodnoty se obnovují průběžně.
+- **Přepočet** (`select.bms_recalc_mode`): termostat se nastavuje podle intervalu, při změně venkovní
+  teploty o `number.bms_recalc_delta`, nebo obojí. Zobrazené hodnoty se obnovují průběžně.
 - **Termostat** se nastavuje s ohledem na jeho krok a rozsah (`target_temp_step`, `min_temp`, `max_temp`),
   jen když se hodnota liší a termostat není vypnutý.
 - **Předpověď** se stahuje jednou a sdílí.
@@ -121,11 +121,11 @@ Sekce lze zapsat i jen názvem (`- curve`). Zápis z verze 0.2 (`modes`, `quick_
     poloha slunce i oblačnost ze stejného okamžiku.
   - **Noční prodloužení** (`number.bms_night_forecast_extra`) v noci posune všechny zapnuté předpovědi
     o zadaný počet hodin dál, aby regulace včas zachytila ranní počasí.
-- **Slunce** (`select.bms_slunce_rezim`) má tři způsoby výpočtu:
+- **Slunce** (`select.bms_sun_mode`) má tři způsoby výpočtu:
   - *Pevné okno* — účinek jen mezi dvěma azimuty (původní chování). Východ a západ slunce se během roku
     posouvají, okno ne, takže v zimě a v létě pokrývá jinou část dne; karta ukazuje, kolik procent
     slunečné doby okno pokrývá v zimě, dnes a v létě.
-  - *Směr oken* — zadáte, kam okna míří (`number.bms_slunce_orientace`, 180° = jih). Účinek odpovídá
+  - *Směr oken* — zadáte, kam okna míří (`number.bms_sun_orientation`, 180° = jih). Účinek odpovídá
     úhlu, pod kterým slunce do oken svítí, a sedí po celý rok bez přenastavení.
   - *Celý den* — slunce se počítá po celou dobu nad obzorem, vztaženo k dnešní polední výšce
     (0 při východu a západu, plný účinek v poledne v zimě i v létě).
@@ -144,12 +144,18 @@ pip install -r requirements_test.txt && pytest       # testy integrace
 Náhled karty bez Home Assistantu: `python -m http.server` v kořeni repozitáře a otevřít
 `/frontend/demo/index.html`.
 
+## Přechod z verze 0.5 na 0.6
+
+ID entit a klíče nastavení jsou anglicky (např. `switch.bms_hlavni_vypinac` → `switch.bms_main_switch`,
+`number.bms_vitr_od` → `number.bms_wind_from`). Entity, uložená nastavení i profily se převedou
+automaticky a zachovají si historii; konfigurace karet se starými názvy vlivů (`vitr`, `srazky`, …)
+funguje dál. Vlastní automatizace, skripty a karty, které odkazují na stará ID entit, je potřeba upravit.
+
 ## Přechod ze staršího ručního nasazení
 
 - Odstraňte starou ruční registraci karty (*Nastavení → Dashboardy → ⋮ → Zdroje*,
   typicky `/local/community/BMS/card.js`) a staré soubory v `www/community/BMS/`.
-- Entity (`number.bms_*`, `switch.bms_*`, `select.bms_*`, `sensor.bms_*`), profily
-  i uložená křivka zůstávají beze změny.
+- Profily i uložená křivka zůstávají beze změny.
 - Vybrané entity (termostat, senzory, počasí) lze změnit přes *Znovu nakonfigurovat*
   bez smazání integrace. Entita slunce už není potřeba — poloha se počítá z polohy HA.
 - Ve verzi 0.2 se profily a nastavení převedou do nového úložiště `heating_curve.data`
