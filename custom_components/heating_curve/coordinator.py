@@ -19,6 +19,7 @@ from homeassistant.const import (
     UnitOfLength,
     UnitOfSpeed,
     UnitOfTemperature,
+    UnitOfVolumetricFlux,
 )
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -48,12 +49,17 @@ from .const import (
     EVENT_PROFILES_CHANGED,
     FORECAST_MAX_AGE,
     HISTORY_HOURS,
+    INFLUENCE_SENSORS,
     INFLUENCES,
     MODE_BOTH,
     MODE_TEMP,
     MODE_TIME,
     SETTINGS_DEBOUNCE,
     SNAPSHOT_INTERVAL,
+    SOURCE_FORECAST,
+    SOURCE_NONE,
+    SOURCE_SENSOR,
+    SOURCE_WEATHER,
     TEMP_HISTORY_DAYS,
     TEMP_SOURCE_SAFE,
     TEMP_SOURCE_SENSOR,
@@ -112,6 +118,7 @@ class BMSRegulator:
         self.temp_source = TEMP_SOURCE_SAFE
         self.forecast: list[dict[str, Any]] = []
         self.forecast_ok = False
+        self.influence_sources: dict[str, str] = {}
         self.last_write: dict[str, Any] = {}
         self.available = True
         self.last_error: str | None = None
@@ -181,7 +188,12 @@ class BMSRegulator:
 
     async def async_start(self) -> None:
         """Spustí sledování a první výpočet (po startu HA, kdy existují všechny entity)."""
-        tracked = [e for e in (self.entry.data.get(CONF_OUTDOOR_SENSOR), self.entry.data.get(CONF_WEATHER)) if e]
+        tracked = [
+            e for e in (
+                self.entry.data.get(CONF_OUTDOOR_SENSOR), self.entry.data.get(CONF_WEATHER),
+                *(self.entry.data.get(conf) for conf in INFLUENCE_SENSORS.values()),
+            ) if e
+        ]
         if tracked:
             self._unsubs.append(async_track_state_change_event(self.hass, tracked, self._on_input_changed))
         if thermostat := self.entry.data.get(CONF_THERMOSTAT):
@@ -334,7 +346,28 @@ class BMSRegulator:
             "clouds": _to_float(clouds),
         }
 
+    @staticmethod
+    def _sensor_value(key: str, value: float, unit: str | None) -> float | None:
+        """Hodnota senzoru vlivu v jednotkách výpočtu (km/h, mm/h, %)."""
+        if key == "wind":
+            return _convert(SpeedConverter, value, unit, UnitOfSpeed.KILOMETERS_PER_HOUR)
+        if key == "rain" and unit in SpeedConverter.VALID_UNITS:
+            return _convert(SpeedConverter, value, unit, UnitOfVolumetricFlux.MILLIMETERS_PER_HOUR)
+        if key == "rain" and unit in DistanceConverter.VALID_UNITS:
+            return _convert(DistanceConverter, value, unit, UnitOfLength.MILLIMETERS)
+        return value
+
+    def _read_influence_sensor(self, key: str) -> float | None:
+        state = self._state(INFLUENCE_SENSORS[key])
+        if state is None or state.state in _INVALID_STATES:
+            return None
+        value = _to_float(state.state)
+        if value is None:
+            return None
+        return self._sensor_value(key, value, state.attributes.get(ATTR_UNIT_OF_MEASUREMENT))
+
     def _read_weather_now(self, now_ts: float) -> dict[str, float]:
+        """Aktuální vlivy: vlastní senzor → entita počasí → nejbližší hodina předpovědi."""
         weather = self._state(CONF_WEATHER)
         current: dict[str, float | None] = {}
         if weather is not None and weather.state not in _INVALID_STATES:
@@ -342,11 +375,16 @@ class BMSRegulator:
         # Weather entity nemá aktuální srážky — použije se nejbližší hodina předpovědi
         nearest = calc.forecast_at(self.forecast, now_ts)
         result: dict[str, float] = {}
+        sources: dict[str, str] = {}
         for key in ("wind", "rain", "humidity", "clouds"):
-            value = current.get(key)
+            value, source = self._read_influence_sensor(key), SOURCE_SENSOR
+            if value is None:
+                value, source = current.get(key), SOURCE_WEATHER
             if value is None and nearest is not None:
-                value = nearest.get(key)
+                value, source = nearest.get(key), SOURCE_FORECAST
+            sources[key] = source if value is not None else SOURCE_NONE
             result[key] = float(value or 0.0)
+        self.influence_sources = sources
         return result
 
     async def async_refresh_weather(self, *, force: bool = False) -> bool:
@@ -949,17 +987,19 @@ class BMSRegulator:
     # ── Problémy a opravy ─────────────────────────────────────────────────────
     @callback
     def _check_entities(self) -> None:
-        for role, conf in (
-            ("thermostat", CONF_THERMOSTAT),
-            ("outdoor_sensor", CONF_OUTDOOR_SENSOR),
-            ("weather", CONF_WEATHER),
-        ):
+        roles = [
+            ("thermostat", CONF_THERMOSTAT, "missing_thermostat"),
+            ("outdoor_sensor", CONF_OUTDOOR_SENSOR, "missing_outdoor_sensor"),
+            ("weather", CONF_WEATHER, "missing_weather"),
+            *((conf, conf, "missing_influence_sensor") for conf in INFLUENCE_SENSORS.values()),
+        ]
+        for role, conf, translation_key in roles:
             entity_id = self.entry.data.get(conf)
             issue_id = f"missing_{role}"
             if entity_id and self.hass.states.get(entity_id) is None:
                 ir.async_create_issue(
                     self.hass, DOMAIN, issue_id, is_fixable=False, severity=ir.IssueSeverity.WARNING,
-                    translation_key=issue_id, translation_placeholders={"entity_id": entity_id},
+                    translation_key=translation_key, translation_placeholders={"entity_id": entity_id},
                 )
             else:
                 ir.async_delete_issue(self.hass, DOMAIN, issue_id)
@@ -986,7 +1026,8 @@ class BMSRegulator:
 
         weather_eid = self.entry.data.get(CONF_WEATHER)
         outdoor_eid = self.entry.data.get(CONF_OUTDOOR_SENSOR)
-        entity_ids = [e for e in (weather_eid, outdoor_eid) if e]
+        sensor_eids = {key: self.entry.data.get(conf) for key, conf in INFLUENCE_SENSORS.items()}
+        entity_ids = [e for e in (weather_eid, outdoor_eid, *sensor_eids.values()) if e]
         if not entity_ids:
             return
         end = dt_util.utcnow()
@@ -1014,6 +1055,15 @@ class BMSRegulator:
                 continue
             hour = int(state.last_updated.timestamp() // 3600) * 3600
             by_hour.setdefault(hour, {"ts": hour})["out"] = _round(value)
+        history_keys = {"wind": "act_wind", "rain": "act_rain", "humidity": "act_hum", "clouds": "act_clouds"}
+        for key, eid in sensor_eids.items():
+            for state in states.get(eid, []) if eid else []:
+                value = _to_float(state.state)
+                if value is None:
+                    continue
+                hour = int(state.last_updated.timestamp() // 3600) * 3600
+                converted = self._sensor_value(key, value, state.attributes.get(ATTR_UNIT_OF_MEASUREMENT))
+                by_hour.setdefault(hour, {"ts": hour})[history_keys[key]] = _round(converted)
         if by_hour and not self.data["history"]:
             self.data["history"] = sorted(by_hour.values(), key=lambda h: h["ts"])
             self.store.async_delay_save()
@@ -1112,6 +1162,8 @@ class BMSRegulator:
                 "thermostat": self.entry.data.get(CONF_THERMOSTAT),
                 "outdoor_sensor": self.entry.data.get(CONF_OUTDOOR_SENSOR),
                 "weather": self.entry.data.get(CONF_WEATHER),
+                **{conf: self.entry.data.get(conf) for conf in INFLUENCE_SENSORS.values()},
+                "sources": self.influence_sources,
             },
             "thermostat": self._thermostat_info(),
             "profile_modified": self._profile_modified(),

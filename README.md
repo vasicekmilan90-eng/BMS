@@ -15,6 +15,11 @@ Požadavky: Home Assistant **2026.9** nebo novější.
 2. Nainstalovat *Chytrý ekvitermní regulátor (BMS)* a restartovat Home Assistant.
 3. *Nastavení → Zařízení a služby → Přidat integraci → Chytrý ekvitermní regulátor (BMS)*.
 
+   Povinný je termostat a venkovní teplotní senzor. Entita počasí je nepovinná — je zdrojem předpovědi
+   a aktuálních vlivů. Pro vítr, srážky, vlhkost a oblačnost lze vybrat **vlastní senzor**; má přednost
+   před entitou počasí (jednotky se převedou na km/h, mm/h a %). Předpověď umí jen entita počasí —
+   bez ní se vlivy počítají z aktuálních hodnot. Entity lze později změnit přes *Znovu nakonfigurovat*.
+
 ### Ručně
 
 Zkopírujte složku `custom_components/heating_curve` do `<config>/custom_components/`

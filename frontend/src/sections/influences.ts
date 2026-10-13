@@ -216,7 +216,8 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     const inf = WEATHER[id];
     const useFc = this.on(`${id}_predpoved`);
     const used = snap.values[`${useFc ? "forecast" : "actual"}_${inf.value}`];
-    const when = useFc ? t("influences.in_hours", { hours: this.num(`${id}_predpoved_hodin`) }) : t("influences.now");
+    const source = snap.inputs.sources?.[inf.value] ?? "weather";
+    const when = useFc ? t("influences.in_hours", { hours: this.num(`${id}_predpoved_hodin`) }) : t(`influences.now_${source}`);
     return this.row(id, inf.icon, t(`influences.${id}`), `${formatNumber(used, lang)} ${inf.unit} · ${when}`);
   }
 

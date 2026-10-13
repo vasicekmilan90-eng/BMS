@@ -10,17 +10,38 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigFl
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
-from .const import CONF_OUTDOOR_SENSOR, CONF_THERMOSTAT, CONF_WEATHER, DEVICE_NAME, DOMAIN
+from .const import (
+    CONF_CLOUDS_SENSOR,
+    CONF_HUMIDITY_SENSOR,
+    CONF_OUTDOOR_SENSOR,
+    CONF_RAIN_SENSOR,
+    CONF_THERMOSTAT,
+    CONF_WEATHER,
+    CONF_WIND_SENSOR,
+    DEVICE_NAME,
+    DOMAIN,
+)
 from .settings import ALL_SETTINGS, NumberSetting, SwitchSetting
 
+
+def _sensor(device_class: str | list[str] | None = None) -> selector.EntitySelector:
+    extra: dict[str, Any] = {"device_class": device_class} if device_class else {}
+    return selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", **extra))
+
+
+# Počasí je volitelné — každý vliv může mít vlastní senzor (předpověď ale umí jen entita počasí).
 DATA_SCHEMA = vol.Schema({
     vol.Required(CONF_THERMOSTAT): selector.EntitySelector(
         selector.EntitySelectorConfig(domain="climate")),
-    vol.Required(CONF_OUTDOOR_SENSOR): selector.EntitySelector(
-        selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
-    vol.Required(CONF_WEATHER): selector.EntitySelector(
+    vol.Required(CONF_OUTDOOR_SENSOR): _sensor("temperature"),
+    vol.Optional(CONF_WEATHER): selector.EntitySelector(
         selector.EntitySelectorConfig(domain="weather")),
+    vol.Optional(CONF_WIND_SENSOR): _sensor("wind_speed"),
+    vol.Optional(CONF_RAIN_SENSOR): _sensor(["precipitation_intensity", "precipitation"]),
+    vol.Optional(CONF_HUMIDITY_SENSOR): _sensor("humidity"),
+    vol.Optional(CONF_CLOUDS_SENSOR): _sensor(),
 })
+INPUT_KEYS = tuple(str(key) for key in DATA_SCHEMA.schema)
 
 
 class HeatingCurveFlow(ConfigFlow, domain=DOMAIN):
@@ -37,7 +58,10 @@ class HeatingCurveFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         entry = self._get_reconfigure_entry()
         if user_input is not None:
-            return self.async_update_reload_and_abort(entry, data_updates=user_input)
+            # vyprázdněné volitelné pole v user_input chybí — stará hodnota se musí odebrat
+            data = {k: v for k, v in entry.data.items() if k not in INPUT_KEYS}
+            data.update({k: v for k, v in user_input.items() if v})
+            return self.async_update_reload_and_abort(entry, data=data)
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(DATA_SCHEMA, entry.data),

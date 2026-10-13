@@ -11,6 +11,22 @@ CONF_THERMOSTAT     = "target_thermostat"
 CONF_OUTDOOR_SENSOR = "outdoor_sensor"
 CONF_WEATHER        = "weather_entity"
 CONF_SUN            = "sun_entity"  # jen kvůli migraci starých záznamů
+CONF_WIND_SENSOR     = "wind_sensor"
+CONF_RAIN_SENSOR     = "rain_sensor"
+CONF_HUMIDITY_SENSOR = "humidity_sensor"
+CONF_CLOUDS_SENSOR   = "clouds_sensor"
+# Měřená veličina vlivu → volitelný senzor, který má přednost před hodnotou z entity počasí
+INFLUENCE_SENSORS = {
+    "wind": CONF_WIND_SENSOR,
+    "rain": CONF_RAIN_SENSOR,
+    "humidity": CONF_HUMIDITY_SENSOR,
+    "clouds": CONF_CLOUDS_SENSOR,
+}
+# Odkud se vzala aktuální hodnota vlivu
+SOURCE_SENSOR   = "sensor"
+SOURCE_WEATHER  = "weather"
+SOURCE_FORECAST = "forecast"
+SOURCE_NONE     = "none"
 
 FRONTEND_URL_BASE = f"/{DOMAIN}"
 CARD_FILENAME     = "bms-master-card.js"
