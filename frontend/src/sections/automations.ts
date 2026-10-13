@@ -10,7 +10,10 @@ type Item = SectionOptions["automations"]["items"][number];
 
 const META: Record<Item, { icon: string; toggle: string; tone: string; numbers: string[] }> = {
   frost: { icon: "mdi:snowflake-alert", toggle: "frost_protection", tone: "frost", numbers: ["frost_threshold", "frost_min_heat"] },
-  night: { icon: "mdi:weather-night", toggle: "night_mode", tone: "night", numbers: ["night_offset", "day_end", "day_start"] },
+  night: {
+    icon: "mdi:weather-night", toggle: "night_mode", tone: "night",
+    numbers: ["night_offset", "day_end", "day_start", "night_forecast_extra"],
+  },
   bypass: { icon: "mdi:weather-sunny-off", toggle: "letni_bypass", tone: "warn", numbers: ["letni_bypass_temp"] },
 };
 
@@ -34,8 +37,9 @@ export class BmsAutomationsSection extends BmsSection<SectionOptions["automation
           threshold: formatNumber(this.num("frost_threshold"), lang, 0), min: formatNumber(this.num("frost_min_heat"), lang, 0),
         });
       case "night":
-        return t("auto.night_desc", {
+        return t(this.num("night_forecast_extra") ? "auto.night_desc_forecast" : "auto.night_desc", {
           start: this.num("day_end"), end: this.num("day_start"), offset: formatSigned(this.num("night_offset"), lang),
+          hours: this.num("night_forecast_extra"),
         });
       case "bypass":
         return t("auto.bypass_desc", { temp: formatNumber(this.num("letni_bypass_temp"), lang, 0) });

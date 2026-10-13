@@ -5,7 +5,7 @@ import en from "../src/translations/en.json";
 import { createTranslator, formatSigned, resolveLanguage } from "../src/i18n";
 import {
   alerts, boostProgress, breakdown, corrections, curveInput, curveSlope, daysInMonth, describeLogEntry, describeRule, extendBoost,
-  formatDuration, groupLogByDay, interpolate, isWrite, parseMmdd, reasonSentence, regulationState, remainingMinutes,
+  formatDuration, forecastHours, groupLogByDay, interpolate, isWrite, parseMmdd, reasonSentence, regulationState, remainingMinutes,
   shiftCurve, slopeCurve, suggestPoint, sunCoverage, toMmdd, userEvents, validatePoints, validateRule, yearSegments,
 } from "../src/logic";
 import { sectionSummary } from "../src/summary";
@@ -157,6 +157,9 @@ describe("texty", () => {
     const noFc = snap({ values: { ...values, applied_out_temp: 21 }, settings: { hlavni_vypinac: true, pouziti_predpovedi: false } });
     expect(curveInput(noFc).forecast).toBe(false);
     expect(sectionSummary("curve", noFc, t, "cs", 0)).toBe("21,0 °C venku → 45 °C");
+    const night = snap({ values: { ...values, forecast_extra_hours: 3 }, settings: { pouziti_predpovedi: true, predpoved_hodin: 6 } });
+    expect(curveInput(night).hours).toBe(9);
+    expect(forecastHours(night, "predpoved_hodin")).toBe(9);
   });
   it("souhrny sekcí", () => {
     expect(sectionSummary("profiles", snap({ profile_modified: true }), t, "cs", 0)).toBe("Výchozí (upraveno)");

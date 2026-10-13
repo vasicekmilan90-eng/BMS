@@ -129,6 +129,31 @@ async def test_per_influence_forecast_and_units(
     assert reg.values["actual_rain"] == pytest.approx(2.0)  # srážky z nejbližší hodiny předpovědi
 
 
+async def test_night_forecast_extension(
+    hass: HomeAssistant, setup_integration: MockConfigEntry, weather: WeatherMock,
+) -> None:
+    reg = _reg(setup_integration)
+    points = {h: {"temperature": 4, "wind_speed": 5, "precipitation": 0, "humidity": 70, "cloud_coverage": 50}
+              for h in range(49)}
+    for hour in (6, 7):  # nejbližší bod k +3 h a nočním +3 h
+        points[hour] = {**points[hour], "wind_speed": 20}
+    weather.set_hourly(points)
+    await _set(hass, "number", "vitr_predpoved_hodin", 3)
+    await _set(hass, "switch", "vitr_predpoved", True)
+    await _set(hass, "number", "night_forecast_extra", 3)
+    await _set(hass, "number", "day_start", 0)
+    await _set(hass, "number", "day_end", 0)  # den nulové délky = celý den noc
+    await hass.services.async_call(DOMAIN, "force_refresh", {}, blocking=True)
+    assert reg.result.night_active
+    assert reg.values["forecast_extra_hours"] == 3
+    assert reg.values["forecast_wind"] == pytest.approx(72.0)
+
+    await _set(hass, "switch", "night_mode", False)
+    await hass.services.async_call(DOMAIN, "force_refresh", {}, blocking=True)
+    assert reg.values["forecast_extra_hours"] == 0
+    assert reg.values["forecast_wind"] == pytest.approx(18.0)
+
+
 async def test_boost_defaults_and_expiry(
     hass: HomeAssistant, setup_integration: MockConfigEntry,
 ) -> None:

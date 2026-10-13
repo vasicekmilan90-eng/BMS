@@ -148,6 +148,7 @@
       "night_offset": { "name": "Night mode: Temperature change" },
       "day_start": { "name": "Night mode: Night ends" },
       "day_end": { "name": "Night mode: Night starts" },
+      "night_forecast_extra": { "name": "Night mode: Forecast extension" },
       "boost_amount": { "name": "Boost: Amount" },
       "boost_hours": { "name": "Boost: Duration" },
       "reduction_amount": { "name": "Reduction: Amount" },

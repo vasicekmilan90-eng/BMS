@@ -508,9 +508,11 @@ class BMSRegulator:
         now_ts = now.timestamp()
         raw_outdoor, source = self._read_outdoor()
         actual = self._read_weather_now(now_ts)
+        night = bool(s["night_mode"]) and calc.is_night(dt_util.now().hour, int(s["day_start"]), int(s["day_end"]))
+        extra_hours = float(s["night_forecast_extra"]) if night else 0.0
 
         def forecast_value(hours: float, key: str) -> float | None:
-            point = calc.forecast_at(self.forecast, now_ts + float(hours) * 3600)
+            point = calc.forecast_at(self.forecast, now_ts + (float(hours) + extra_hours) * 3600)
             return None if point is None else point.get(key)
 
         forecast_temp = forecast_value(s["predpoved_hodin"], "temp")
@@ -525,7 +527,7 @@ class BMSRegulator:
             applied[value_key] = fc if s[f"{key}_predpoved"] and fc is not None else actual[value_key]
 
         actual_el, actual_az = self._sun_position(now)
-        sun_fc_when = now + timedelta(hours=float(s["slunce_predpoved_hodin"]))
+        sun_fc_when = now + timedelta(hours=float(s["slunce_predpoved_hodin"]) + extra_hours)
         fc_el, fc_az = self._sun_position(sun_fc_when)
         use_sun_fc = bool(s["slunce_predpoved"])
         sun_el, sun_az = (fc_el, fc_az) if use_sun_fc else (actual_el, actual_az)
@@ -556,6 +558,7 @@ class BMSRegulator:
             "actual": actual,
             "forecast": forecasts,
             "forecast_temp": forecast_temp,
+            "forecast_extra_hours": extra_hours,
             "actual_sun": (actual_el, actual_az),
             "forecast_sun": (fc_el, fc_az),
         }
@@ -583,6 +586,7 @@ class BMSRegulator:
             "forecast_clouds": _round(forecast["clouds"]),
             "forecast_humidity": _round(forecast["humidity"]),
             "forecast_temp": _round(extra["forecast_temp"]),
+            "forecast_extra_hours": extra["forecast_extra_hours"],
             "sun_elevation": _round(inputs.sun_elevation),
             "sun_azimuth": _round(inputs.sun_azimuth),
             "actual_sun_elevation": _round(extra["actual_sun"][0]),

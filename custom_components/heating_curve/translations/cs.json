@@ -148,6 +148,7 @@
       "night_offset": { "name": "Noční režim: Změna teploty" },
       "day_start": { "name": "Noční režim: Konec noci" },
       "day_end": { "name": "Noční režim: Začátek noci" },
+      "night_forecast_extra": { "name": "Noční režim: Prodloužení předpovědi" },
       "boost_amount": { "name": "Boost: Přídavek" },
       "boost_hours": { "name": "Boost: Trvání" },
       "reduction_amount": { "name": "Útlum: Snížení" },

@@ -352,6 +352,7 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
     const useFc = this.on("pouziti_predpovedi");
     const input = curveInput(snap);
     const hours = this.num("predpoved_hodin");
+    const nightExtra = Number(snap.values.forecast_extra_hours ?? 0);
     const now = formatTemp(snap.values.raw_outdoor_temp, lang);
     const value = input.forecast
       ? html`<b>${formatTemp(input.value, lang)}</b> <span class="muted">(${t("curve.input_now_value", { value: now })})</span>`
@@ -360,7 +361,7 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
       ? html`<span class="warn small">${t("curve.input_unavailable")}</span>` : nothing;
     if (!editable) {
       return html`<div class="input"><span class="muted">${input.forecast
-        ? t("curve.input_forecast_text", { hours }) : t("curve.input_now_text")}</span> ${value} ${unavailable}</div>`;
+        ? t("curve.input_forecast_text", { hours: input.hours }) : t("curve.input_now_text")}</span> ${value} ${unavailable}</div>`;
     }
     const options = [...new Set([1, 2, 3, 4, 6, 8, 12, 24, 48, 72, hours])].sort((a, b) => a - b);
     return html`<div class="input">
@@ -374,7 +375,7 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
       ${useFc ? html`<select aria-label=${t("curve.input_hours")} title=${t("curve.input_hours_hint")} .value=${String(hours)}
         @change=${(e: Event) => this.setSetting("predpoved_hodin", Number((e.target as HTMLSelectElement).value), t("curve.input_hours"))}>
         ${options.map((h) => html`<option value=${h} ?selected=${h === hours}>${t("influences.in_hours", { hours: h })}</option>`)}
-      </select>` : nothing}
+      </select>${nightExtra ? html` <span class="muted small">${t("curve.input_night_extra", { hours: nightExtra })}</span>` : nothing}` : nothing}
       <span>→ ${value}</span>
       ${unavailable}
     </div>`;
