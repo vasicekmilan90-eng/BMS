@@ -132,7 +132,17 @@ export interface ThermostatInfo {
 
 export interface Snapshot {
   entry_id: string;
-  inputs: { thermostat?: string; outdoor_sensor?: string; weather?: string };
+  inputs: {
+    thermostat?: string;
+    outdoor_sensor?: string;
+    weather?: string;
+    wind_sensor?: string;
+    rain_sensor?: string;
+    humidity_sensor?: string;
+    clouds_sensor?: string;
+    /** Odkud je aktuální hodnota vlivu: sensor | weather | forecast | none. */
+    sources?: Record<string, "sensor" | "weather" | "forecast" | "none">;
+  };
   thermostat: ThermostatInfo | null;
   profile_modified: boolean;
   active_rule: string | null;

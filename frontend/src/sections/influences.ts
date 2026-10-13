@@ -5,7 +5,7 @@ import { Chart, cssVar } from "../chart.js";
 import { BmsSection } from "../components.js";
 import type { SectionOptions } from "../config.js";
 import { formatNumber, formatSigned, formatTime } from "../i18n.js";
-import { SUN_MODES, sunCoverage, type SunMode } from "../logic.js";
+import { SUN_MODES, forecastHours, sunCoverage, type SunMode } from "../logic.js";
 import { baseStyles } from "../styles.js";
 import type { ChartPoint } from "../types.js";
 
@@ -216,7 +216,8 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     const inf = WEATHER[id];
     const useFc = this.on(`${id}_predpoved`);
     const used = snap.values[`${useFc ? "forecast" : "actual"}_${inf.value}`];
-    const when = useFc ? t("influences.in_hours", { hours: this.num(`${id}_predpoved_hodin`) }) : t("influences.now");
+    const source = snap.inputs.sources?.[inf.value] ?? "weather";
+    const when = useFc ? t("influences.in_hours", { hours: forecastHours(snap, `${id}_predpoved_hodin`) }) : t(`influences.now_${source}`);
     return this.row(id, inf.icon, t(`influences.${id}`), `${formatNumber(used, lang)} ${inf.unit} · ${when}`);
   }
 
@@ -226,7 +227,7 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     const mode = this.sunMode;
     const factor = Number(snap.result?.sun_factor ?? snap.values.sun_factor ?? 0);
     const useFc = this.on("slunce_predpoved");
-    const when = useFc ? t("influences.in_hours", { hours: this.num("slunce_predpoved_hodin") }) : t("influences.now");
+    const when = useFc ? t("influences.in_hours", { hours: forecastHours(snap, "slunce_predpoved_hodin") }) : t("influences.now");
     const where = factor > 0 ? t(`sun.in.${mode}`, { pct: Math.round(factor * 100) }) : t(`sun.out.${mode}`);
     return this.row("slunce", "mdi:weather-sunny", t("influences.sun"), `${t(`sun.mode.${mode}`)} · ${where} · ${when}`);
   }

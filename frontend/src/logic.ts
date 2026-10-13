@@ -113,13 +113,18 @@ export function reasonSentence(snap: Snapshot, t: Translator, language: string):
   return { text: parts.join(", "), limit };
 }
 
+/** Hodiny předpovědi včetně nočního prodloužení, které právě platí. */
+export function forecastHours(snap: Snapshot, key: string): number {
+  return Number(snap.settings[key]) + Number(snap.values.forecast_extra_hours ?? 0);
+}
+
 /** Jakou venkovní teplotu křivka použila — s předpovědí to není hodnota senzoru, ale teplota za N hodin. */
 export function curveInput(snap: Snapshot): { value: number | null; forecast: boolean; hours: number } {
   const fc = snap.values.forecast_temp;
   return {
     value: snap.values.applied_out_temp ?? null,
     forecast: Boolean(snap.settings.pouziti_predpovedi) && fc !== null && fc !== undefined,
-    hours: Number(snap.settings.predpoved_hodin),
+    hours: forecastHours(snap, "predpoved_hodin"),
   };
 }
 

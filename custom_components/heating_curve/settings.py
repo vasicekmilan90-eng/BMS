@@ -53,6 +53,7 @@ NUMBER_SETTINGS: tuple[NumberSetting, ...] = (
     NumberSetting("night_offset",         -15, 15,  0.5, -5.0, _C),
     NumberSetting("day_start",            0,   23,  1,   6,    _H),
     NumberSetting("day_end",              0,   23,  1,   22,   _H),
+    NumberSetting("night_forecast_extra", 0,   12,  1,   0,    _H),
     NumberSetting("boost_amount",         0.5, 20,  0.5, 5.0,  _C),
     NumberSetting("boost_hours",          0.5, 24,  0.5, 2.0,  _H),
     NumberSetting("reduction_amount",     0.5, 20,  0.5, 5.0,  _C),

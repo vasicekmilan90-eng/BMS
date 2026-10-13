@@ -3,30 +3,46 @@
     "step": {
       "user": {
         "title": "BMS controller setup",
-        "description": "Select the entities used for weather-compensated heating control. The sun position is calculated from the Home Assistant location.",
+        "description": "Select the entities used for weather-compensated heating control. Each weather influence can have its own sensor; where none is selected, the weather entity is used. The sun position is calculated from the Home Assistant location.",
         "data": {
           "target_thermostat": "Thermostat (climate entity)",
           "outdoor_sensor": "Outdoor temperature sensor",
-          "weather_entity": "Weather entity"
+          "weather_entity": "Weather entity",
+          "wind_sensor": "Wind speed sensor",
+          "rain_sensor": "Precipitation sensor",
+          "humidity_sensor": "Outdoor humidity sensor",
+          "clouds_sensor": "Cloud coverage sensor"
         },
         "data_description": {
           "target_thermostat": "Thermostat whose target temperature the controller will set.",
           "outdoor_sensor": "Outdoor temperature sensor — primary source for the heating curve.",
-          "weather_entity": "Weather entity used for the forecast and wind, precipitation, humidity and cloud influences."
+          "weather_entity": "Optional. Source of the forecast (curve and influences) and of current influences without their own sensor.",
+          "wind_sensor": "Optional. Takes precedence over the weather entity's wind; the unit is converted to km/h.",
+          "rain_sensor": "Optional. Preferably precipitation intensity (mm/h); takes precedence over the weather entity.",
+          "humidity_sensor": "Optional. Relative humidity in %; takes precedence over the weather entity.",
+          "clouds_sensor": "Optional. Cloud coverage in % (0 = clear, 100 = overcast); takes precedence over the weather entity."
         }
       },
       "reconfigure": {
         "title": "Change BMS controller entities",
-        "description": "Change the entities used by the controller. Profiles, curve and settings are kept.",
+        "description": "Change the entities used by the controller. A cleared field is removed. Profiles, curve and settings are kept.",
         "data": {
           "target_thermostat": "Thermostat (climate entity)",
           "outdoor_sensor": "Outdoor temperature sensor",
-          "weather_entity": "Weather entity"
+          "weather_entity": "Weather entity",
+          "wind_sensor": "Wind speed sensor",
+          "rain_sensor": "Precipitation sensor",
+          "humidity_sensor": "Outdoor humidity sensor",
+          "clouds_sensor": "Cloud coverage sensor"
         },
         "data_description": {
           "target_thermostat": "Thermostat whose target temperature the controller will set.",
           "outdoor_sensor": "Outdoor temperature sensor — primary source for the heating curve.",
-          "weather_entity": "Weather entity used for the forecast and wind, precipitation, humidity and cloud influences."
+          "weather_entity": "Optional. Source of the forecast (curve and influences) and of current influences without their own sensor.",
+          "wind_sensor": "Optional. Takes precedence over the weather entity's wind; the unit is converted to km/h.",
+          "rain_sensor": "Optional. Preferably precipitation intensity (mm/h); takes precedence over the weather entity.",
+          "humidity_sensor": "Optional. Relative humidity in %; takes precedence over the weather entity.",
+          "clouds_sensor": "Optional. Cloud coverage in % (0 = clear, 100 = overcast); takes precedence over the weather entity."
         }
       }
     },
@@ -105,6 +121,10 @@
     "missing_weather": {
       "title": "BMS controller weather entity not found",
       "description": "Entity {entity_id} was not found, weather influences and the forecast are unavailable. Fix it via Reconfigure."
+    },
+    "missing_influence_sensor": {
+      "title": "BMS controller weather influence sensor not found",
+      "description": "Entity {entity_id} was not found. The influence falls back to the weather entity if one is configured. Fix or remove the sensor via Reconfigure."
     }
   },
   "entity": {
@@ -128,6 +148,7 @@
       "night_offset": { "name": "Night mode: Temperature change" },
       "day_start": { "name": "Night mode: Night ends" },
       "day_end": { "name": "Night mode: Night starts" },
+      "night_forecast_extra": { "name": "Night mode: Forecast extension" },
       "boost_amount": { "name": "Boost: Amount" },
       "boost_hours": { "name": "Boost: Duration" },
       "reduction_amount": { "name": "Reduction: Amount" },

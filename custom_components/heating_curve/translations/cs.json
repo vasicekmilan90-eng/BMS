@@ -3,30 +3,46 @@
     "step": {
       "user": {
         "title": "Nastavení BMS regulátoru",
-        "description": "Vyberte entity pro ekvitermní regulaci vytápění. Poloha slunce se počítá z polohy Home Assistantu.",
+        "description": "Vyberte entity pro ekvitermní regulaci vytápění. Každý vliv počasí může mít vlastní senzor; kde senzor chybí, použije se entita počasí. Poloha slunce se počítá z polohy Home Assistantu.",
         "data": {
           "target_thermostat": "Termostat (climate entita)",
           "outdoor_sensor": "Venkovní teplotní senzor",
-          "weather_entity": "Entita počasí (weather)"
+          "weather_entity": "Entita počasí (weather)",
+          "wind_sensor": "Senzor rychlosti větru",
+          "rain_sensor": "Senzor srážek",
+          "humidity_sensor": "Senzor venkovní vlhkosti",
+          "clouds_sensor": "Senzor oblačnosti"
         },
         "data_description": {
           "target_thermostat": "Termostat, jehož teplotu bude regulátor nastavovat.",
           "outdoor_sensor": "Senzor venkovní teploty — primární zdroj pro výpočet křivky.",
-          "weather_entity": "Entita počasí pro předpověď a vlivy větru, srážek, vlhkosti a oblačnosti."
+          "weather_entity": "Nepovinné. Zdroj předpovědi (křivka i vlivy) a aktuálních vlivů, pro které není vybraný senzor.",
+          "wind_sensor": "Nepovinné. Má přednost před větrem z entity počasí; jednotka se převede na km/h.",
+          "rain_sensor": "Nepovinné. Nejlépe intenzita srážek (mm/h); má přednost před entitou počasí.",
+          "humidity_sensor": "Nepovinné. Relativní vlhkost v %; má přednost před entitou počasí.",
+          "clouds_sensor": "Nepovinné. Oblačnost v % (0 = jasno, 100 = zataženo); má přednost před entitou počasí."
         }
       },
       "reconfigure": {
         "title": "Změna entit BMS regulátoru",
-        "description": "Změňte entity, se kterými regulátor pracuje. Profily, křivka ani nastavení se nemění.",
+        "description": "Změňte entity, se kterými regulátor pracuje. Vyprázdněné pole se odebere. Profily, křivka ani nastavení se nemění.",
         "data": {
           "target_thermostat": "Termostat (climate entita)",
           "outdoor_sensor": "Venkovní teplotní senzor",
-          "weather_entity": "Entita počasí (weather)"
+          "weather_entity": "Entita počasí (weather)",
+          "wind_sensor": "Senzor rychlosti větru",
+          "rain_sensor": "Senzor srážek",
+          "humidity_sensor": "Senzor venkovní vlhkosti",
+          "clouds_sensor": "Senzor oblačnosti"
         },
         "data_description": {
           "target_thermostat": "Termostat, jehož teplotu bude regulátor nastavovat.",
           "outdoor_sensor": "Senzor venkovní teploty — primární zdroj pro výpočet křivky.",
-          "weather_entity": "Entita počasí pro předpověď a vlivy větru, srážek, vlhkosti a oblačnosti."
+          "weather_entity": "Nepovinné. Zdroj předpovědi (křivka i vlivy) a aktuálních vlivů, pro které není vybraný senzor.",
+          "wind_sensor": "Nepovinné. Má přednost před větrem z entity počasí; jednotka se převede na km/h.",
+          "rain_sensor": "Nepovinné. Nejlépe intenzita srážek (mm/h); má přednost před entitou počasí.",
+          "humidity_sensor": "Nepovinné. Relativní vlhkost v %; má přednost před entitou počasí.",
+          "clouds_sensor": "Nepovinné. Oblačnost v % (0 = jasno, 100 = zataženo); má přednost před entitou počasí."
         }
       }
     },
@@ -105,6 +121,10 @@
     "missing_weather": {
       "title": "Entita počasí pro BMS regulátor neexistuje",
       "description": "Entita {entity_id} nebyla nalezena, vlivy počasí a předpověď jsou nedostupné. Opravte ji přes Znovu nakonfigurovat."
+    },
+    "missing_influence_sensor": {
+      "title": "Senzor vlivu počasí pro BMS regulátor neexistuje",
+      "description": "Entita {entity_id} nebyla nalezena. Vliv se dočasně počítá z entity počasí, pokud je nastavená. Opravte nebo odeberte senzor přes Znovu nakonfigurovat."
     }
   },
   "entity": {
@@ -128,6 +148,7 @@
       "night_offset": { "name": "Noční režim: Změna teploty" },
       "day_start": { "name": "Noční režim: Konec noci" },
       "day_end": { "name": "Noční režim: Začátek noci" },
+      "night_forecast_extra": { "name": "Noční režim: Prodloužení předpovědi" },
       "boost_amount": { "name": "Boost: Přídavek" },
       "boost_hours": { "name": "Boost: Trvání" },
       "reduction_amount": { "name": "Útlum: Snížení" },
