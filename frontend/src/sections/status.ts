@@ -69,7 +69,7 @@ export class BmsStatusSection extends BmsSection<SectionOptions["status"]> {
         return;
       }
     }
-    if (!(await this.setSetting("hlavni_vypinac", target.checked, t("status.main_switch")))) target.checked = !target.checked;
+    if (!(await this.setSetting("main_switch", target.checked, t("status.main_switch")))) target.checked = !target.checked;
   }
 
   private renderThermostat(now: number) {
@@ -145,7 +145,7 @@ export class BmsStatusSection extends BmsSection<SectionOptions["status"]> {
     const r = snap.result;
     const st = regulationState(snap);
     const now = Date.now() / 1000;
-    const on = Boolean(snap.settings.hlavni_vypinac);
+    const on = Boolean(snap.settings.main_switch);
     const reason = reasonSentence(snap, t, lang);
     const events = userEvents(snap);
 

@@ -1,5 +1,5 @@
 {
-  "name": "Chytrý ekvitermní regulátor (BMS)",
+  "name": "Smart Heating Curve Controller (BMS)",
   "homeassistant": "2026.9.0",
   "render_readme": true
 }

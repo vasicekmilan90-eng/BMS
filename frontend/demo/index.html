@@ -72,7 +72,7 @@
     });
 
     const snapshot = await (await fetch("./snapshot.json")).json();
-    snapshot.settings.hlavni_vypinac = true;
+    snapshot.settings.main_switch = true;
     const listeners = new Set();
     const emit = () => listeners.forEach((cb) => cb(structuredClone(snapshot)));
     const hass = {

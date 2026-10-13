@@ -5,7 +5,7 @@ import type { CalcLogEntry, CalcResult, CurvePoint, ScheduleRule, Snapshot } fro
 
 export type RegulationState = "inactive" | "boost" | "reduction" | "frost" | "night" | "bypass" | "safe" | "active";
 
-export const SUN_MODES = ["okno", "fasada", "nad_obzorem"] as const;
+export const SUN_MODES = ["window", "facade", "daylight"] as const;
 export type SunMode = (typeof SUN_MODES)[number];
 
 /** Jakou část doby nad obzorem (podle vzorků dráhy) pokrývá pevné okno azimutu. */
@@ -17,7 +17,7 @@ export function sunCoverage(path: [number, number][], start: number, end: number
 
 export function regulationState(snap: Snapshot): RegulationState {
   const r = snap.result;
-  if (!snap.settings.hlavni_vypinac) return "inactive";
+  if (!snap.settings.main_switch) return "inactive";
   if (snap.boost.effective > 0) return "boost";
   if (snap.boost.effective < 0) return "reduction";
   if (r?.safe_mode) return "safe";
@@ -123,8 +123,8 @@ export function curveInput(snap: Snapshot): { value: number | null; forecast: bo
   const fc = snap.values.forecast_temp;
   return {
     value: snap.values.applied_out_temp ?? null,
-    forecast: Boolean(snap.settings.pouziti_predpovedi) && fc !== null && fc !== undefined,
-    hours: forecastHours(snap, "predpoved_hodin"),
+    forecast: Boolean(snap.settings.curve_forecast) && fc !== null && fc !== undefined,
+    hours: forecastHours(snap, "curve_forecast_hours"),
   };
 }
 

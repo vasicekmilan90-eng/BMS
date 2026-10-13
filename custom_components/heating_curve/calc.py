@@ -86,10 +86,10 @@ def sun_factor(
 ) -> float:
     """Podíl plného účinku slunce (0–1) bez vlivu oblačnosti."""
     if mode == SUN_MODE_FACADE:
-        return facade_factor(elevation, azimuth, float(settings["slunce_orientace"]))
+        return facade_factor(elevation, azimuth, float(settings["sun_orientation"]))
     if mode == SUN_MODE_DAYLIGHT:
         return daylight_factor(elevation, noon_elevation)
-    return window_factor(elevation, azimuth, float(settings["solarni_start"]), float(settings["solarni_konec"]))
+    return window_factor(elevation, azimuth, float(settings["solar_window_start"]), float(settings["solar_window_end"]))
 
 
 def is_night(hour: int, day_start: int, day_end: int) -> bool:
@@ -183,19 +183,19 @@ def compute(inp: CalcInput) -> CalcResult:
     corr: dict[str, float] = {}
     for key, cfg in INFLUENCES.items():
         corr[cfg["value"]] = (
-            linear_influence(measured[cfg["value"]], s[f"{key}_od"], s[f"{key}_do"], s[f"{key}_max_eff"])
-            if s[f"vliv_{key}"] else 0.0
+            linear_influence(measured[cfg["value"]], s[f"{key}_from"], s[f"{key}_to"], s[f"{key}_max_effect"])
+            if s[f"influence_{key}"] else 0.0
         )
 
     corr_sun = 0.0
     factor = 0.0
     if inp.sun_elevation is not None and inp.sun_azimuth is not None:
         factor = sun_factor(
-            str(s.get("slunce_rezim", "")), inp.sun_elevation, inp.sun_azimuth, s, inp.sun_noon_elevation,
+            str(s.get("sun_mode", "")), inp.sun_elevation, inp.sun_azimuth, s, inp.sun_noon_elevation,
         )
-        if s["vliv_slunce"]:
+        if s["influence_sun"]:
             clouds = inp.sun_clouds if inp.sun_clouds is not None else inp.clouds
-            corr_sun = float(s["slunce_max_eff"]) * factor * cloud_factor(clouds)
+            corr_sun = float(s["sun_max_effect"]) * factor * cloud_factor(clouds)
 
     night_active = bool(s["night_mode"]) and is_night(inp.hour, int(s["day_start"]), int(s["day_end"]))
     night_offset = float(s["night_offset"]) if night_active else 0.0
@@ -209,7 +209,7 @@ def compute(inp: CalcInput) -> CalcResult:
 
     raw = float(s["safe_curve_temp"]) if inp.safe_mode else curve_temp + total
     result = max(t_min, min(t_max, raw))
-    bypass_active = bool(s["letni_bypass"]) and inp.raw_outdoor >= s["letni_bypass_temp"]
+    bypass_active = bool(s["summer_bypass"]) and inp.raw_outdoor >= s["summer_bypass_temp"]
 
     return CalcResult(
         curve_temp=curve_temp,

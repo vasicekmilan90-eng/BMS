@@ -1,6 +1,6 @@
 {
   "domain": "heating_curve",
-  "name": "Chytrý ekvitermní regulátor (BMS)",
+  "name": "Smart Heating Curve Controller (BMS)",
   "after_dependencies": ["recorder"],
   "codeowners": ["@vasicekmilan90-eng"],
   "config_flow": true,
@@ -11,5 +11,5 @@
   "issue_tracker": "https://github.com/vasicekmilan90-eng/BMS/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.5.0"
+  "version": "0.6.0"
 }

@@ -31,12 +31,13 @@ SOURCE_NONE     = "none"
 FRONTEND_URL_BASE = f"/{DOMAIN}"
 CARD_FILENAME     = "bms-master-card.js"
 
-DEVICE_NAME     = "BMS Regulátor"
-DEFAULT_PROFILE = "Výchozí"
+DEVICE_NAME     = "BMS"
+DEFAULT_PROFILE = "Default"
 
 # ── Úložiště ──────────────────────────────────────────────────────────────────
 STORE_KEY     = f"{DOMAIN}.data"
 STORE_VERSION = 1
+STORE_MINOR_VERSION = 2
 LEGACY_PROFILES_KEY = f"{DOMAIN}_profiles"
 LEGACY_CURVE_KEY    = f"{DOMAIN}_curve"
 
@@ -46,20 +47,22 @@ DEFAULT_CURVE_POINTS = [
 ]
 
 DEFAULT_SEASONAL_PROFILES: dict[str, list[dict[str, float]]] = {
-    "Zima": [
+    "Winter": [
         {"x": -20, "y": 75}, {"x": -10, "y": 65}, {"x": 0, "y": 55},
         {"x": 10,  "y": 42}, {"x": 20,  "y": 30},
     ],
-    "Jaro/Podzim": [
+    "Spring/Autumn": [
         {"x": -20, "y": 65}, {"x": -10, "y": 55}, {"x": 0, "y": 43},
         {"x": 10,  "y": 32}, {"x": 20,  "y": 20},
     ],
-    "Léto": [
+    "Summer": [
         {"x": -20, "y": 55}, {"x": -10, "y": 44}, {"x": 0, "y": 34},
         {"x": 10,  "y": 25}, {"x": 20,  "y": 18},
     ],
 }
 DEFAULT_STARRED = list(DEFAULT_SEASONAL_PROFILES)
+# Názvy výchozích profilů do verze 0.5
+LEGACY_PROFILE_NAMES = {"Výchozí": DEFAULT_PROFILE, "Zima": "Winter", "Jaro/Podzim": "Spring/Autumn", "Léto": "Summer"}
 
 # ── Zdroj venkovní teploty ────────────────────────────────────────────────────
 TEMP_SOURCE_SENSOR  = "sensor"
@@ -67,23 +70,23 @@ TEMP_SOURCE_WEATHER = "weather"
 TEMP_SOURCE_SAFE    = "safe_fallback"
 
 # ── Vliv slunce ────────────────────────────────────────────────────────────────────
-SUN_MODE_WINDOW   = "okno"         # pevné rozpětí azimutu (původní chování)
-SUN_MODE_FACADE   = "fasada"       # směr oken — účinek podle úhlu dopadu
-SUN_MODE_DAYLIGHT = "nad_obzorem"  # celý den, vztaženo k dnešnímu poledni
+SUN_MODE_WINDOW   = "window"    # pevné rozpětí azimutu (původní chování)
+SUN_MODE_FACADE   = "facade"    # směr oken — účinek podle úhlu dopadu
+SUN_MODE_DAYLIGHT = "daylight"  # celý den, vztaženo k dnešnímu poledni
 SUN_MODES = [SUN_MODE_WINDOW, SUN_MODE_FACADE, SUN_MODE_DAYLIGHT]
 
 # ── Vlivy počasí: klíč nastavení → (klíč měřené veličiny, výchozí od/do/max) ───
 INFLUENCES: dict[str, dict] = {
-    "vitr":      {"value": "wind",     "from": 10, "to": 60, "max": 5.0, "unit": "km/h"},
-    "srazky":    {"value": "rain",     "from":  1, "to": 15, "max": 2.0, "unit": "mm/h"},
-    "vlhkost":   {"value": "humidity", "from": 50, "to": 90, "max": 2.0, "unit": "%"},
-    "oblacnost": {"value": "clouds",   "from": 20, "to": 80, "max": 2.0, "unit": "%"},
+    "wind":     {"value": "wind",     "from": 10, "to": 60, "max": 5.0, "unit": "km/h"},
+    "rain":     {"value": "rain",     "from":  1, "to": 15, "max": 2.0, "unit": "mm/h"},
+    "humidity": {"value": "humidity", "from": 50, "to": 90, "max": 2.0, "unit": "%"},
+    "clouds":   {"value": "clouds",   "from": 20, "to": 80, "max": 2.0, "unit": "%"},
 }
 
 # ── Režimy přepočtu ───────────────────────────────────────────────────────────
-MODE_TIME = "cas"
-MODE_TEMP = "teplota"
-MODE_BOTH = "oboji"
+MODE_TIME = "time"
+MODE_TEMP = "temperature"
+MODE_BOTH = "both"
 RECALC_MODES = [MODE_TIME, MODE_TEMP, MODE_BOTH]
 
 # ── Limity logů a historie ────────────────────────────────────────────────────

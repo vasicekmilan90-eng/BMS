@@ -14,7 +14,7 @@ const META: Record<Item, { icon: string; toggle: string; tone: string; numbers: 
     icon: "mdi:weather-night", toggle: "night_mode", tone: "night",
     numbers: ["night_offset", "day_end", "day_start", "night_forecast_extra"],
   },
-  bypass: { icon: "mdi:weather-sunny-off", toggle: "letni_bypass", tone: "warn", numbers: ["letni_bypass_temp"] },
+  bypass: { icon: "mdi:weather-sunny-off", toggle: "summer_bypass", tone: "warn", numbers: ["summer_bypass_temp"] },
 };
 
 @customElement("bms-sec-automations")
@@ -42,7 +42,7 @@ export class BmsAutomationsSection extends BmsSection<SectionOptions["automation
           hours: this.num("night_forecast_extra"),
         });
       case "bypass":
-        return t("auto.bypass_desc", { temp: formatNumber(this.num("letni_bypass_temp"), lang, 0) });
+        return t("auto.bypass_desc", { temp: formatNumber(this.num("summer_bypass_temp"), lang, 0) });
     }
   }
 
@@ -90,7 +90,7 @@ export class BmsAutomationsSection extends BmsSection<SectionOptions["automation
           ${item === "night" ? this.dayBar() : nothing}
           <div class="controls">${meta.numbers.map((key) =>
             html`<bms-number .ctx=${this.ctx} key=${key} label=${t(`setting.${key}`)}></bms-number>`)}</div>
-          ${item === "night" ? html`<div class="small muted">${t("auto.night_hint")}</div>` : nothing}
+          <div class="small muted">${t(`auto.${item}_hint`)}</div>
         </div>` : nothing}`;
       })}
       ${canEdit ? html`<div class="footer">

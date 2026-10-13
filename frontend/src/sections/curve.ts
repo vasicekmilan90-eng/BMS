@@ -78,7 +78,7 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
   private get range(): [number, number] {
     const pts = this.points;
     const [a, b] = this.options.range
-      ?? [Number(this.snap.settings.rozsah_venku_min ?? -20), Number(this.snap.settings.rozsah_venku_max ?? 20)];
+      ?? [Number(this.snap.settings.outdoor_range_min ?? -20), Number(this.snap.settings.outdoor_range_max ?? 20)];
     return [Math.min(a, pts[0]?.x ?? a), Math.max(b, pts.at(-1)?.x ?? b)];
   }
 
@@ -349,9 +349,9 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
   private renderInput() {
     const { snap, lang, editable } = this.ctx;
     const t = this.t;
-    const useFc = this.on("pouziti_predpovedi");
+    const useFc = this.on("curve_forecast");
     const input = curveInput(snap);
-    const hours = this.num("predpoved_hodin");
+    const hours = this.num("curve_forecast_hours");
     const nightExtra = Number(snap.values.forecast_extra_hours ?? 0);
     const now = formatTemp(snap.values.raw_outdoor_temp, lang);
     const value = input.forecast
@@ -367,13 +367,13 @@ export class BmsCurveSection extends BmsSection<SectionOptions["curve"]> {
     return html`<div class="input">
       <span class="muted">${t("curve.input")}</span>
       <div class="seg" role="group" aria-label=${t("curve.input")}>
-        <button aria-pressed=${!useFc} @click=${() => useFc && this.setSetting("pouziti_predpovedi", false, t("curve.input"))}>
+        <button aria-pressed=${!useFc} @click=${() => useFc && this.setSetting("curve_forecast", false, t("curve.input"))}>
           ${t("curve.input_mode_now")}</button>
-        <button aria-pressed=${useFc} @click=${() => !useFc && this.setSetting("pouziti_predpovedi", true, t("curve.input"))}>
+        <button aria-pressed=${useFc} @click=${() => !useFc && this.setSetting("curve_forecast", true, t("curve.input"))}>
           ${t("curve.input_mode_forecast")}</button>
       </div>
       ${useFc ? html`<select aria-label=${t("curve.input_hours")} title=${t("curve.input_hours_hint")} .value=${String(hours)}
-        @change=${(e: Event) => this.setSetting("predpoved_hodin", Number((e.target as HTMLSelectElement).value), t("curve.input_hours"))}>
+        @change=${(e: Event) => this.setSetting("curve_forecast_hours", Number((e.target as HTMLSelectElement).value), t("curve.input_hours"))}>
         ${options.map((h) => html`<option value=${h} ?selected=${h === hours}>${t("influences.in_hours", { hours: h })}</option>`)}
       </select>${nightExtra ? html` <span class="muted small">${t("curve.input_night_extra", { hours: nightExtra })}</span>` : nothing}` : nothing}
       <span>→ ${value}</span>

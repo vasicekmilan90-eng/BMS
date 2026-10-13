@@ -12,7 +12,7 @@ const GROUPS: Record<GroupId, { icon: string; numbers: string[]; toggles?: strin
   limits: { icon: "mdi:thermometer-lines", numbers: ["limit_min", "limit_max"] },
   fallback: { icon: "mdi:shield-check-outline", numbers: ["safe_temp", "safe_curve_temp"] },
   temporary: { icon: "mdi:timer-outline", numbers: ["boost_amount", "boost_hours", "reduction_amount", "reduction_hours"] },
-  recalc: { icon: "mdi:timer-refresh-outline", numbers: ["prepocet_interval", "prepocet_delta"] },
+  recalc: { icon: "mdi:timer-refresh-outline", numbers: ["recalc_interval", "recalc_delta"] },
 };
 
 @customElement("bms-sec-settings")
@@ -31,7 +31,7 @@ export class BmsSettingsSection extends BmsSection<SectionOptions["settings"]> {
 
   protected render() {
     const t = this.t;
-    const mode = String(this.snap.settings.prepocet_rezim);
+    const mode = String(this.snap.settings.recalc_mode);
     return html`<div class="grid">
       ${this.options.groups.map((id) => {
         const g = GROUPS[id];
@@ -39,10 +39,10 @@ export class BmsSettingsSection extends BmsSection<SectionOptions["settings"]> {
           <div class="tile-title"><ha-icon icon=${g.icon}></ha-icon>${t(`settings.${id}`)}</div>
           ${(g.toggles ?? []).map((key) => html`<bms-toggle .ctx=${this.ctx} key=${key} label=${t(`setting.${key}`)}></bms-toggle>`)}
           ${id === "recalc" ? html`<div class="row">
-            <label class="label small" for="mode">${t("setting.prepocet_rezim")}</label>
+            <label class="label small" for="mode">${t("setting.recalc_mode")}</label>
             <select id="mode" ?disabled=${!this.ctx.editable} .value=${mode}
-              @change=${(e: Event) => this.setSetting("prepocet_rezim", (e.target as HTMLSelectElement).value)}>
-              ${["cas", "teplota", "oboji"].map((m) => html`<option value=${m} ?selected=${m === mode}>${t(`mode.${m}`)}</option>`)}
+              @change=${(e: Event) => this.setSetting("recalc_mode", (e.target as HTMLSelectElement).value)}>
+              ${["time", "temperature", "both"].map((m) => html`<option value=${m} ?selected=${m === mode}>${t(`mode.${m}`)}</option>`)}
             </select>
           </div>` : nothing}
           ${g.numbers.map((key) => html`<bms-number .ctx=${this.ctx} key=${key} label=${t(`setting.${key}`)}></bms-number>`)}

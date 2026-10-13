@@ -36,11 +36,11 @@ async def test_simulate(hass: HomeAssistant, setup_integration: MockConfigEntry)
 
 async def test_profile_modified_and_snapshot(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
     reg = _reg(setup_integration)
-    await hass.services.async_call(DOMAIN, "load_profile", {"name": "Zima"}, blocking=True)
+    await hass.services.async_call(DOMAIN, "load_profile", {"name": "Winter"}, blocking=True)
     assert reg.snapshot()["profile_modified"] is False
     await reg.async_set_curve([{"x": -20, "y": 70}, {"x": 20, "y": 25}])
     assert reg.snapshot()["profile_modified"] is True
-    await hass.services.async_call(DOMAIN, "save_profile", {"name": "Zima"}, blocking=True)
+    await hass.services.async_call(DOMAIN, "save_profile", {"name": "Winter"}, blocking=True)
     snap = reg.snapshot()
     assert snap["profile_modified"] is False
     assert snap["thermostat"]["entity_id"] == "climate.kotel"
@@ -55,25 +55,25 @@ async def test_profile_modified_and_snapshot(hass: HomeAssistant, setup_integrat
 async def test_sun_mode_select(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
     reg = _reg(setup_integration)
     await hass.services.async_call(
-        "select", "select_option", {"entity_id": "select.bms_slunce_rezim", "option": "nad_obzorem"}, blocking=True,
+        "select", "select_option", {"entity_id": "select.bms_sun_mode", "option": "daylight"}, blocking=True,
     )
-    assert reg.settings["slunce_rezim"] == "nad_obzorem"
+    assert reg.settings["sun_mode"] == "daylight"
     inputs, _ = reg._gather_inputs()
     assert inputs.sun_noon_elevation is not None and inputs.sun_noon_elevation > 0
 
 
 async def test_sun_forecast_split_migration(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
     reg = _reg(setup_integration)
-    assert hass.states.get("switch.bms_slunce_predpoved") is not None
-    reg.data["settings"].pop("slunce_predpoved", None)
-    reg.data["settings"]["pouziti_predpovedi"] = True
-    reg.data["profiles"]["Zima"]["settings"] = {"pouziti_predpovedi": True}
+    assert hass.states.get("switch.bms_sun_forecast") is not None
+    reg.data["settings"].pop("sun_forecast", None)
+    reg.data["settings"]["curve_forecast"] = True
+    reg.data["profiles"]["Winter"]["settings"] = {"curve_forecast": True}
     reg._migrate_sun_forecast()
-    assert reg.settings["slunce_predpoved"] is True
-    assert reg.data["profiles"]["Zima"]["settings"]["slunce_predpoved"] is True
+    assert reg.settings["sun_forecast"] is True
+    assert reg.data["profiles"]["Winter"]["settings"]["sun_forecast"] is True
     # křivka a slunce už na sobě nezávisí
-    reg.async_set_setting("pouziti_predpovedi", False)
-    assert reg.settings["slunce_predpoved"] is True
+    reg.async_set_setting("curve_forecast", False)
+    assert reg.settings["sun_forecast"] is True
 
 
 async def test_boost_records_start_and_duration(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
@@ -90,13 +90,13 @@ async def test_options_flow(hass: HomeAssistant, setup_integration: MockConfigEn
     assert result["type"] is FlowResultType.FORM
     result = await hass.config_entries.options.async_configure(result["flow_id"], {
         "limit_min": 28, "limit_max": 50, "safe_temp": -2, "safe_curve_temp": 38,
-        "prepocet_rezim": "oboji", "prepocet_interval": 15, "prepocet_delta": 1,
-        "pouziti_predpovedi": True, "predpoved_hodin": 6,
-        "slunce_rezim": "fasada", "slunce_orientace": 200,
+        "recalc_mode": "both", "recalc_interval": 15, "recalc_delta": 1,
+        "curve_forecast": True, "curve_forecast_hours": 6,
+        "sun_mode": "facade", "sun_orientation": 200,
     })
     assert result["type"] is FlowResultType.CREATE_ENTRY
     reg = _reg(setup_integration)
-    assert reg.settings["limit_max"] == 50 and reg.settings["prepocet_rezim"] == "oboji"
-    assert reg.settings["slunce_rezim"] == "fasada" and reg.settings["slunce_orientace"] == 200
-    assert hass.states.get("select.bms_slunce_rezim").state == "fasada"
+    assert reg.settings["limit_max"] == 50 and reg.settings["recalc_mode"] == "both"
+    assert reg.settings["sun_mode"] == "facade" and reg.settings["sun_orientation"] == 200
+    assert hass.states.get("select.bms_sun_mode").state == "facade"
     assert hass.states.get("number.bms_limit_max").state == "50.0"

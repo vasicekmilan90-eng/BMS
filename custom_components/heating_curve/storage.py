@@ -16,11 +16,13 @@ from .const import (
     DEFAULT_SEASONAL_PROFILES,
     DEFAULT_STARRED,
     LEGACY_CURVE_KEY,
+    LEGACY_PROFILE_NAMES,
     LEGACY_PROFILES_KEY,
     STORE_KEY,
+    STORE_MINOR_VERSION,
     STORE_VERSION,
 )
-from .settings import PROFILE_KEYS, coerce_setting, legacy_key
+from .settings import PROFILE_KEYS, coerce_setting, legacy_key, migrate_settings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ def _empty_data() -> dict[str, Any]:
             for name, points in DEFAULT_SEASONAL_PROFILES.items()
         },
         "active_profile": DEFAULT_PROFILE,
+        "default_profile": DEFAULT_PROFILE,
         "starred": list(DEFAULT_STARRED),
         "schedules": [],
         "schedule_rule": None,
@@ -63,12 +66,43 @@ def migrate_legacy_profile(raw: dict[str, Any]) -> dict[str, Any]:
     return {"settings": settings, "curve": [{"x": float(p["x"]), "y": float(p["y"])} for p in curve]}
 
 
+def migrate_profile_names(data: dict[str, Any]) -> None:
+    """0.6: výchozí profily mají anglické názvy (přejmenuje jen ty, které nekolidují)."""
+    profiles = data.get("profiles") or {}
+    names = {
+        old: new for old, new in LEGACY_PROFILE_NAMES.items()
+        if new == DEFAULT_PROFILE or (old in profiles and new not in profiles)
+    }
+    for old, new in names.items():
+        if old in profiles:
+            profiles[new] = profiles.pop(old)
+    active = data.get("active_profile") or DEFAULT_PROFILE
+    data["active_profile"] = names.get(active, active)
+    data["starred"] = [names.get(n, n) for n in data.get("starred") or []]
+    for rule in data.get("schedules") or []:
+        if isinstance(rule, dict) and "profile" in rule:
+            rule["profile"] = names.get(rule["profile"], rule["profile"])
+
+
+class _Store(Store[dict[str, Any]]):
+    async def _async_migrate_func(
+        self, old_major_version: int, old_minor_version: int, old_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        if old_minor_version < 2:  # 0.6: anglické klíče nastavení a názvy výchozích profilů
+            old_data["settings"] = migrate_settings(old_data.get("settings") or {})
+            for profile in (old_data.get("profiles") or {}).values():
+                if isinstance(profile, dict):
+                    profile["settings"] = migrate_settings(profile.get("settings") or {})
+            migrate_profile_names(old_data)
+        return old_data
+
+
 class BMSStore:
     """Jeden JSON soubor `.storage/heating_curve.data`, se zpětnou migrací ze starých souborů."""
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
-        self._store: Store[dict[str, Any]] = Store(hass, STORE_VERSION, STORE_KEY)
+        self._store = _Store(hass, STORE_VERSION, STORE_KEY, minor_version=STORE_MINOR_VERSION)
         self.data: dict[str, Any] = _empty_data()
         self.ok = True
 
@@ -102,6 +136,7 @@ class BMSStore:
             data["active_profile"] = profiles_raw.get("__active_profile__", DEFAULT_PROFILE)
             data["starred"] = list(profiles_raw.get("__starred__", DEFAULT_STARRED))
             data["schedules"] = list(profiles_raw.get("__schedules__", []))
+            migrate_profile_names(data)
         return data
 
     async def async_save(self) -> bool:

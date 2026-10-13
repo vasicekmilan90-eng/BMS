@@ -28,7 +28,7 @@ const RESULT: CalcResult = {
 function snap(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
     entry_id: "e", inputs: {}, thermostat: null, profile_modified: false, active_rule: null, next_events: [],
-    available: true, last_error: null, problems: {}, settings: { hlavni_vypinac: true, limit_min: 25, limit_max: 42, prepocet_interval: 15 },
+    available: true, last_error: null, problems: {}, settings: { main_switch: true, limit_min: 25, limit_max: 42, recalc_interval: 15 },
     setting_meta: {}, entities: {}, curve: [{ x: -20, y: 70 }, { x: 20, y: 20 }], storage_ok: true,
     profiles: ["Výchozí"], system_profiles: [], active_profile: "Výchozí", starred: [], schedules: [],
     boost: { active: false, effective: 0 }, temp_source: "sensor", safe_since: null,
@@ -65,7 +65,7 @@ describe("překlady", () => {
 
 describe("stav regulace", () => {
   it("priority stavů", () => {
-    expect(regulationState(snap({ settings: { hlavni_vypinac: false } }))).toBe("inactive");
+    expect(regulationState(snap({ settings: { main_switch: false } }))).toBe("inactive");
     expect(regulationState(snap({ boost: { active: true, effective: 3 } }))).toBe("boost");
     expect(regulationState(snap())).toBe("active");
   });
@@ -151,15 +151,15 @@ describe("texty", () => {
   });
   it("křivka z předpovědi není hodnota senzoru", () => {
     const values = { applied_out_temp: 14.9, raw_outdoor_temp: 21, forecast_temp: 14.9 };
-    const withFc = snap({ values, settings: { hlavni_vypinac: true, pouziti_predpovedi: true, predpoved_hodin: 24 } });
+    const withFc = snap({ values, settings: { main_switch: true, curve_forecast: true, curve_forecast_hours: 24 } });
     expect(curveInput(withFc)).toEqual({ value: 14.9, forecast: true, hours: 24 });
     expect(sectionSummary("curve", withFc, t, "cs", 0)).toBe("předpověď 14,9 °C za 24 h → 45 °C");
-    const noFc = snap({ values: { ...values, applied_out_temp: 21 }, settings: { hlavni_vypinac: true, pouziti_predpovedi: false } });
+    const noFc = snap({ values: { ...values, applied_out_temp: 21 }, settings: { main_switch: true, curve_forecast: false } });
     expect(curveInput(noFc).forecast).toBe(false);
     expect(sectionSummary("curve", noFc, t, "cs", 0)).toBe("21,0 °C venku → 45 °C");
-    const night = snap({ values: { ...values, forecast_extra_hours: 3 }, settings: { pouziti_predpovedi: true, predpoved_hodin: 6 } });
+    const night = snap({ values: { ...values, forecast_extra_hours: 3 }, settings: { curve_forecast: true, curve_forecast_hours: 6 } });
     expect(curveInput(night).hours).toBe(9);
-    expect(forecastHours(night, "predpoved_hodin")).toBe(9);
+    expect(forecastHours(night, "curve_forecast_hours")).toBe(9);
   });
   it("souhrny sekcí", () => {
     expect(sectionSummary("profiles", snap({ profile_modified: true }), t, "cs", 0)).toBe("Výchozí (upraveno)");

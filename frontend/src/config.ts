@@ -13,7 +13,9 @@ export const PROFILE_TABS = ["manage", "schedules"] as const;
 export const PROFILE_ACTIONS = ["load", "save", "rename", "delete", "star", "transfer"] as const;
 export const CURVE_SERIES = ["modified", "result", "limits", "safe_point", "current"] as const;
 export const CURVE_EDITORS = ["none", "shift", "points", "full"] as const;
-export const INFLUENCE_ITEMS = ["vitr", "srazky", "vlhkost", "oblacnost", "slunce"] as const;
+export const INFLUENCE_ITEMS = ["wind", "rain", "humidity", "clouds", "sun"] as const;
+/** Názvy vlivů do verze 0.5. */
+const LEGACY_INFLUENCES: Record<string, string> = { vitr: "wind", srazky: "rain", vlhkost: "humidity", oblacnost: "clouds", slunce: "sun" };
 /** Předpověď pro křivku se od 0.4 nastavuje přímo u křivky; starší skupina „forecast“ se tiše vynechá. */
 export const SETTINGS_GROUPS = ["limits", "fallback", "temporary", "recalc"] as const;
 export const LAYOUTS = ["auto", "single", "columns"] as const;
@@ -194,7 +196,10 @@ function normalizeOptions(type: SectionId, raw: Record<string, unknown>): Sectio
     }
     case "influences":
       return {
-        items: pickList(raw.items, INFLUENCE_ITEMS, SECTION_DEFAULTS.influences.items),
+        items: pickList(
+          Array.isArray(raw.items) ? raw.items.map((i) => LEGACY_INFLUENCES[String(i)] ?? i) : raw.items,
+          INFLUENCE_ITEMS, SECTION_DEFAULTS.influences.items,
+        ),
         chart: raw.chart !== false,
         controls: pickOne(raw.controls, ["values", "full"] as const, "full"),
       };

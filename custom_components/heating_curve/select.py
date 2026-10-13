@@ -28,7 +28,7 @@ class BMSProfileSelect(BMSEntity, SelectEntity):
     """Aktivní profil křivky (stav drží úložiště regulátoru)."""
 
     def __init__(self, regulator: BMSRegulator) -> None:
-        super().__init__(regulator, "select", "profil_krivky", "profile_select")
+        super().__init__(regulator, "select", "curve_profile", "profile_select")
 
     @property
     def options(self) -> list[str]:

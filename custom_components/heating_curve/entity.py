@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class BMSEntity(Entity):
-    """Entita zařízení „BMS Regulátor“ napojená na regulátor.
+    """Entita zařízení „BMS“ napojená na regulátor.
 
     entity_id se při prvním přidání nastaví na `<platforma>.bms_<klíč>` (stará karta s ním počítá).
     """

@@ -61,20 +61,20 @@
           "limit_max": "Limit termostatu: maximum",
           "safe_temp": "Bezpečná venkovní teplota",
           "safe_curve_temp": "Topení při výpadku venkovní teploty",
-          "prepocet_rezim": "Kdy nastavovat termostat",
-          "prepocet_interval": "Interval přepočtu",
-          "prepocet_delta": "Změna venkovní teploty pro přepočet",
-          "pouziti_predpovedi": "Křivka z předpovědi teploty",
-          "predpoved_hodin": "Křivka: výhled předpovědi",
-          "slunce_rezim": "Vliv slunce: způsob výpočtu",
-          "slunce_orientace": "Vliv slunce: kam míří okna (azimut)",
-          "slunce_predpoved": "Vliv slunce: použít polohu slunce za výhled",
-          "slunce_predpoved_hodin": "Vliv slunce: výhled"
+          "recalc_mode": "Kdy nastavovat termostat",
+          "recalc_interval": "Interval přepočtu",
+          "recalc_delta": "Změna venkovní teploty pro přepočet",
+          "curve_forecast": "Křivka z předpovědi teploty",
+          "curve_forecast_hours": "Křivka: výhled předpovědi",
+          "sun_mode": "Vliv slunce: způsob výpočtu",
+          "sun_orientation": "Vliv slunce: kam míří okna (azimut)",
+          "sun_forecast": "Vliv slunce: použít polohu slunce za výhled",
+          "sun_forecast_hours": "Vliv slunce: výhled"
         },
         "data_description": {
-          "predpoved_hodin": "Křivka počítá s předpovězenou venkovní teplotou za tento počet hodin. Odpovídá setrvačnosti domu, obvykle 2–6 h.",
-          "slunce_rezim": "Pevné okno = jen mezi azimuty solárního okna (během roku se vůči východu a západu slunce posouvá). Směr oken = podle úhlu dopadu na okna. Celý den = po celou dobu nad obzorem, vztaženo k dnešnímu poledni.",
-          "slunce_orientace": "Použije se v režimu Směr oken: 90° = východ, 180° = jih, 270° = západ."
+          "curve_forecast_hours": "Křivka počítá s předpovězenou venkovní teplotou za tento počet hodin. Odpovídá setrvačnosti domu, obvykle 2–6 h.",
+          "sun_mode": "Pevné okno = jen mezi azimuty solárního okna (během roku se vůči východu a západu slunce posouvá). Směr oken = podle úhlu dopadu na okna. Celý den = po celou dobu nad obzorem, vztaženo k dnešnímu poledni.",
+          "sun_orientation": "Použije se v režimu Směr oken: 90° = východ, 180° = jih, 270° = západ."
         }
       }
     },
@@ -83,18 +83,18 @@
     }
   },
   "selector": {
-    "prepocet_rezim": {
+    "recalc_mode": {
       "options": {
-        "cas": "Podle intervalu",
-        "teplota": "Při změně venkovní teploty",
-        "oboji": "Interval i změna teploty"
+        "time": "Podle intervalu",
+        "temperature": "Při změně venkovní teploty",
+        "both": "Interval i změna teploty"
       }
     },
-    "slunce_rezim": {
+    "sun_mode": {
       "options": {
-        "okno": "Pevné okno azimutu",
-        "fasada": "Podle směru oken",
-        "nad_obzorem": "Celý den nad obzorem"
+        "window": "Pevné okno azimutu",
+        "facade": "Podle směru oken",
+        "daylight": "Celý den nad obzorem"
       }
     }
   },
@@ -107,6 +107,12 @@
     },
     "profile_not_found": {
       "message": "Profil „{name}“ neexistuje."
+    },
+    "profile_exists": {
+      "message": "Profil „{name}“ už existuje."
+    },
+    "profile_name_reserved": {
+      "message": "Název „{name}“ používá výchozí profil."
     }
   },
   "issues": {
@@ -133,16 +139,16 @@
     },
     "number": {
       "safe_temp": { "name": "Bezpečná venkovní teplota" },
-      "rozsah_venku_min": { "name": "Rozsah venku: Min" },
-      "rozsah_venku_max": { "name": "Rozsah venku: Max" },
+      "outdoor_range_min": { "name": "Rozsah venku: Min" },
+      "outdoor_range_max": { "name": "Rozsah venku: Max" },
       "limit_min": { "name": "Limit termostatu: Min" },
       "limit_max": { "name": "Limit termostatu: Max" },
-      "predpoved_hodin": { "name": "Křivka: Výhled předpovědi" },
-      "vitr_predpoved_hodin": { "name": "Vítr: Výhled předpovědi" },
-      "srazky_predpoved_hodin": { "name": "Srážky: Výhled předpovědi" },
-      "vlhkost_predpoved_hodin": { "name": "Vlhkost: Výhled předpovědi" },
-      "oblacnost_predpoved_hodin": { "name": "Oblačnost: Výhled předpovědi" },
-      "slunce_predpoved_hodin": { "name": "Slunce: Výhled předpovědi" },
+      "curve_forecast_hours": { "name": "Křivka: Výhled předpovědi" },
+      "wind_forecast_hours": { "name": "Vítr: Výhled předpovědi" },
+      "rain_forecast_hours": { "name": "Srážky: Výhled předpovědi" },
+      "humidity_forecast_hours": { "name": "Vlhkost: Výhled předpovědi" },
+      "clouds_forecast_hours": { "name": "Oblačnost: Výhled předpovědi" },
+      "sun_forecast_hours": { "name": "Slunce: Výhled předpovědi" },
       "frost_threshold": { "name": "Protimraz: Práh teploty" },
       "frost_min_heat": { "name": "Protimraz: Min. topení" },
       "night_offset": { "name": "Noční režim: Změna teploty" },
@@ -153,61 +159,61 @@
       "boost_hours": { "name": "Boost: Trvání" },
       "reduction_amount": { "name": "Útlum: Snížení" },
       "reduction_hours": { "name": "Útlum: Trvání" },
-      "vitr_od": { "name": "Vítr: Účinek od" },
-      "vitr_do": { "name": "Vítr: Plný účinek od" },
-      "vitr_max_eff": { "name": "Vítr: Max. korekce" },
-      "srazky_od": { "name": "Srážky: Účinek od" },
-      "srazky_do": { "name": "Srážky: Plný účinek od" },
-      "srazky_max_eff": { "name": "Srážky: Max. korekce" },
-      "vlhkost_od": { "name": "Vlhkost: Účinek od" },
-      "vlhkost_do": { "name": "Vlhkost: Plný účinek od" },
-      "vlhkost_max_eff": { "name": "Vlhkost: Max. korekce" },
-      "oblacnost_od": { "name": "Oblačnost: Účinek od" },
-      "oblacnost_do": { "name": "Oblačnost: Plný účinek od" },
-      "oblacnost_max_eff": { "name": "Oblačnost: Max. korekce" },
-      "solarni_start": { "name": "Solární okno: Začátek" },
-      "solarni_konec": { "name": "Solární okno: Konec" },
-      "slunce_orientace": { "name": "Slunce: Směr oken" },
-      "slunce_max_eff": { "name": "Slunce: Max. korekce" },
-      "prepocet_interval": { "name": "Přepočet: Interval" },
-      "prepocet_delta": { "name": "Přepočet: Změna teploty" },
-      "letni_bypass_temp": { "name": "Letní bypass: Teplota" },
+      "wind_from": { "name": "Vítr: Účinek od" },
+      "wind_to": { "name": "Vítr: Plný účinek od" },
+      "wind_max_effect": { "name": "Vítr: Max. korekce" },
+      "rain_from": { "name": "Srážky: Účinek od" },
+      "rain_to": { "name": "Srážky: Plný účinek od" },
+      "rain_max_effect": { "name": "Srážky: Max. korekce" },
+      "humidity_from": { "name": "Vlhkost: Účinek od" },
+      "humidity_to": { "name": "Vlhkost: Plný účinek od" },
+      "humidity_max_effect": { "name": "Vlhkost: Max. korekce" },
+      "clouds_from": { "name": "Oblačnost: Účinek od" },
+      "clouds_to": { "name": "Oblačnost: Plný účinek od" },
+      "clouds_max_effect": { "name": "Oblačnost: Max. korekce" },
+      "solar_window_start": { "name": "Solární okno: Začátek" },
+      "solar_window_end": { "name": "Solární okno: Konec" },
+      "sun_orientation": { "name": "Slunce: Směr oken" },
+      "sun_max_effect": { "name": "Slunce: Max. korekce" },
+      "recalc_interval": { "name": "Přepočet: Interval" },
+      "recalc_delta": { "name": "Přepočet: Změna teploty" },
+      "summer_bypass_temp": { "name": "Letní bypass: Teplota" },
       "safe_curve_outdoor": { "name": "Bezpečný bod: Venkovní" },
       "safe_curve_temp": { "name": "Bezpečný bod: Topení" }
     },
     "switch": {
-      "hlavni_vypinac": { "name": "Hlavní vypínač" },
-      "pouziti_predpovedi": { "name": "Křivka: Použít předpověď" },
-      "vliv_vitr": { "name": "Vliv: Vítr" },
-      "vliv_srazky": { "name": "Vliv: Srážky" },
-      "vliv_vlhkost": { "name": "Vliv: Vlhkost" },
-      "vliv_oblacnost": { "name": "Vliv: Oblačnost" },
-      "vliv_slunce": { "name": "Vliv: Pozice slunce" },
+      "main_switch": { "name": "Hlavní vypínač" },
+      "curve_forecast": { "name": "Křivka: Použít předpověď" },
+      "influence_wind": { "name": "Vliv: Vítr" },
+      "influence_rain": { "name": "Vliv: Srážky" },
+      "influence_humidity": { "name": "Vliv: Vlhkost" },
+      "influence_clouds": { "name": "Vliv: Oblačnost" },
+      "influence_sun": { "name": "Vliv: Pozice slunce" },
       "frost_protection": { "name": "Protimrazová ochrana" },
       "night_mode": { "name": "Noční režim" },
-      "letni_bypass": { "name": "Letní bypass" },
-      "vitr_predpoved": { "name": "Vítr: Použít předpověď" },
-      "srazky_predpoved": { "name": "Srážky: Použít předpověď" },
-      "vlhkost_predpoved": { "name": "Vlhkost: Použít předpověď" },
-      "oblacnost_predpoved": { "name": "Oblačnost: Použít předpověď" },
-      "slunce_predpoved": { "name": "Slunce: Použít předpověď" }
+      "summer_bypass": { "name": "Letní bypass" },
+      "wind_forecast": { "name": "Vítr: Použít předpověď" },
+      "rain_forecast": { "name": "Srážky: Použít předpověď" },
+      "humidity_forecast": { "name": "Vlhkost: Použít předpověď" },
+      "clouds_forecast": { "name": "Oblačnost: Použít předpověď" },
+      "sun_forecast": { "name": "Slunce: Použít předpověď" }
     },
     "select": {
-      "profil_krivky": { "name": "Profil křivky" },
-      "prepocet_rezim": {
+      "curve_profile": { "name": "Profil křivky" },
+      "recalc_mode": {
         "name": "Přepočet: Režim",
         "state": {
-          "cas": "Podle času",
-          "teplota": "Podle změny teploty",
-          "oboji": "Čas i teplota"
+          "time": "Podle času",
+          "temperature": "Podle změny teploty",
+          "both": "Čas i teplota"
         }
       },
-      "slunce_rezim": {
+      "sun_mode": {
         "name": "Slunce: Režim",
         "state": {
-          "okno": "Pevné okno azimutu",
-          "fasada": "Podle směru oken",
-          "nad_obzorem": "Celý den nad obzorem"
+          "window": "Pevné okno azimutu",
+          "facade": "Podle směru oken",
+          "daylight": "Celý den nad obzorem"
         }
       }
     },

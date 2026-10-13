@@ -10,13 +10,13 @@ import { baseStyles } from "../styles.js";
 import type { ChartPoint } from "../types.js";
 
 type ItemId = SectionOptions["influences"]["items"][number];
-type WeatherId = Exclude<ItemId, "slunce">;
+type WeatherId = Exclude<ItemId, "sun">;
 
 const WEATHER: Record<WeatherId, { value: string; icon: string; unit: string; corr: string; series: keyof ChartPoint }> = {
-  vitr: { value: "wind", icon: "mdi:weather-windy", unit: "km/h", corr: "corr_wind", series: "act_wind" },
-  srazky: { value: "rain", icon: "mdi:weather-pouring", unit: "mm/h", corr: "corr_rain", series: "act_rain" },
-  vlhkost: { value: "humidity", icon: "mdi:water-percent", unit: "%", corr: "corr_humidity", series: "act_hum" },
-  oblacnost: { value: "clouds", icon: "mdi:weather-cloudy", unit: "%", corr: "corr_clouds", series: "act_clouds" },
+  wind: { value: "wind", icon: "mdi:weather-windy", unit: "km/h", corr: "corr_wind", series: "act_wind" },
+  rain: { value: "rain", icon: "mdi:weather-pouring", unit: "mm/h", corr: "corr_rain", series: "act_rain" },
+  humidity: { value: "humidity", icon: "mdi:water-percent", unit: "%", corr: "corr_humidity", series: "act_hum" },
+  clouds: { value: "clouds", icon: "mdi:weather-cloudy", unit: "%", corr: "corr_clouds", series: "act_clouds" },
 };
 
 const SERIES: { key: keyof ChartPoint; axis: string; color: string; fallback: string }[] = [
@@ -180,11 +180,11 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
 
   private effectOf(id: ItemId): number {
     const v = this.snap.values;
-    return Number((id === "slunce" ? v.corr_sun : v[WEATHER[id].corr]) ?? 0);
+    return Number((id === "sun" ? v.corr_sun : v[WEATHER[id].corr]) ?? 0);
   }
 
   private isActive(id: ItemId): boolean {
-    return this.on(`vliv_${id}`) && Math.abs(this.effectOf(id)) >= 0.05;
+    return this.on(`influence_${id}`) && Math.abs(this.effectOf(id)) >= 0.05;
   }
 
   private effect(value: number) {
@@ -195,7 +195,7 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
   private row(id: ItemId, icon: string, name: string, desc: string) {
     const { editable } = this.ctx;
     const t = this.t;
-    const enabled = this.on(`vliv_${id}`);
+    const enabled = this.on(`influence_${id}`);
     const full = this.options.controls === "full" && editable;
     const open = this.open.has(id);
     return html`<div class="item">
@@ -205,19 +205,19 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
       ${full ? html`<button class="icon-btn" aria-expanded=${open} aria-label=${t("influences.edit")} title=${t("influences.edit")}
         @click=${() => (this.open = this.toggle(this.open, id))}><ha-icon icon=${open ? "mdi:chevron-up" : "mdi:tune-variant"}></ha-icon></button>` : nothing}
       <ha-switch .checked=${enabled} ?disabled=${!editable} aria-label=${name}
-        @change=${(e: Event) => this.setSetting(`vliv_${id}`, (e.target as HTMLInputElement).checked, name)}></ha-switch>
+        @change=${(e: Event) => this.setSetting(`influence_${id}`, (e.target as HTMLInputElement).checked, name)}></ha-switch>
     </div>
-    ${open && full ? (id === "slunce" ? this.sunDetails() : this.weatherDetails(id)) : nothing}`;
+    ${open && full ? (id === "sun" ? this.sunDetails() : this.weatherDetails(id)) : nothing}`;
   }
 
   private weatherRow(id: WeatherId) {
     const { snap, lang } = this.ctx;
     const t = this.t;
     const inf = WEATHER[id];
-    const useFc = this.on(`${id}_predpoved`);
+    const useFc = this.on(`${id}_forecast`);
     const used = snap.values[`${useFc ? "forecast" : "actual"}_${inf.value}`];
     const source = snap.inputs.sources?.[inf.value] ?? "weather";
-    const when = useFc ? t("influences.in_hours", { hours: forecastHours(snap, `${id}_predpoved_hodin`) }) : t(`influences.now_${source}`);
+    const when = useFc ? t("influences.in_hours", { hours: forecastHours(snap, `${id}_forecast_hours`) }) : t(`influences.now_${source}`);
     return this.row(id, inf.icon, t(`influences.${id}`), `${formatNumber(used, lang)} ${inf.unit} · ${when}`);
   }
 
@@ -226,23 +226,23 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     const t = this.t;
     const mode = this.sunMode;
     const factor = Number(snap.result?.sun_factor ?? snap.values.sun_factor ?? 0);
-    const useFc = this.on("slunce_predpoved");
-    const when = useFc ? t("influences.in_hours", { hours: forecastHours(snap, "slunce_predpoved_hodin") }) : t("influences.now");
+    const useFc = this.on("sun_forecast");
+    const when = useFc ? t("influences.in_hours", { hours: forecastHours(snap, "sun_forecast_hours") }) : t("influences.now");
     const where = factor > 0 ? t(`sun.in.${mode}`, { pct: Math.round(factor * 100) }) : t(`sun.out.${mode}`);
-    return this.row("slunce", "mdi:weather-sunny", t("influences.sun"), `${t(`sun.mode.${mode}`)} · ${where} · ${when}`);
+    return this.row("sun", "mdi:weather-sunny", t("influences.sun"), `${t(`sun.mode.${mode}`)} · ${where} · ${when}`);
   }
 
   private get sunMode(): SunMode {
-    const mode = String(this.snap.settings.slunce_rezim ?? "okno");
-    return (SUN_MODES as readonly string[]).includes(mode) ? (mode as SunMode) : "okno";
+    const mode = String(this.snap.settings.sun_mode ?? "window");
+    return (SUN_MODES as readonly string[]).includes(mode) ? (mode as SunMode) : "window";
   }
 
   /** Průběh korekce: 0 pod „od“, lineárně do „max“ na „do“. */
   private ramp(key: WeatherId, unit: string, current: number | null | undefined) {
     const { lang } = this.ctx;
-    const from = this.num(`${key}_od`);
-    const to = this.num(`${key}_do`);
-    const max = this.num(`${key}_max_eff`);
+    const from = this.num(`${key}_from`);
+    const to = this.num(`${key}_to`);
+    const max = this.num(`${key}_max_effect`);
     const span = Math.max(1, to - from);
     const x0 = Math.max(0, from - span * 0.3);
     const x1 = to + span * 0.3;
@@ -267,7 +267,7 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     const { snap, lang } = this.ctx;
     const t = this.t;
     const inf = WEATHER[id];
-    const useFc = this.on(`${id}_predpoved`);
+    const useFc = this.on(`${id}_forecast`);
     const used = snap.values[`${useFc ? "forecast" : "actual"}_${inf.value}`];
     return html`<div class="item-details">
       ${this.ramp(id, inf.unit, used)}
@@ -276,13 +276,13 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
       })}</div>
       <div class="dgrid">
         <div>
-          <bms-toggle .ctx=${this.ctx} key="${id}_predpoved" label=${t("influences.use_forecast")}></bms-toggle>
-          <bms-number .ctx=${this.ctx} key="${id}_predpoved_hodin" label=${t("influences.horizon")}></bms-number>
+          <bms-toggle .ctx=${this.ctx} key="${id}_forecast" label=${t("influences.use_forecast")}></bms-toggle>
+          <bms-number .ctx=${this.ctx} key="${id}_forecast_hours" label=${t("influences.horizon")}></bms-number>
         </div>
         <div>
-          <bms-number .ctx=${this.ctx} key="${id}_od" label=${t("influences.from")}></bms-number>
-          <bms-number .ctx=${this.ctx} key="${id}_do" label=${t("influences.to")}></bms-number>
-          <bms-number .ctx=${this.ctx} key="${id}_max_eff" label=${t("influences.max")}></bms-number>
+          <bms-number .ctx=${this.ctx} key="${id}_from" label=${t("influences.from")}></bms-number>
+          <bms-number .ctx=${this.ctx} key="${id}_to" label=${t("influences.to")}></bms-number>
+          <bms-number .ctx=${this.ctx} key="${id}_max_effect" label=${t("influences.max")}></bms-number>
         </div>
       </div>
     </div>`;
@@ -294,9 +294,9 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     const t = this.t;
     const paths = snap.sun_paths;
     const line = (pts: [number, number][] | undefined) => (pts ?? []).map(([az, el]) => `${ax(az).toFixed(1)},${ay(el).toFixed(1)}`).join(" ");
-    const orient = this.num("slunce_orientace");
-    const start = this.num("solarni_start");
-    const end = this.num("solarni_konec");
+    const orient = this.num("sun_orientation");
+    const start = this.num("solar_window_start");
+    const end = this.num("solar_window_end");
     const v = snap.values;
     const sunAz = v.sun_azimuth;
     const sunEl = v.sun_elevation;
@@ -308,11 +308,11 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
           <stop offset="1" stop-color="var(--bms-warn)" stop-opacity="0"></stop>
         </linearGradient>
       </defs>
-      ${mode === "okno" ? svg`<rect x=${ax(start)} y="0" width=${Math.max(0, ax(end) - ax(start))} height=${H} fill="var(--bms-warn)" opacity="0.18"></rect>` : nothing}
-      ${mode === "fasada" ? svg`
+      ${mode === "window" ? svg`<rect x=${ax(start)} y="0" width=${Math.max(0, ax(end) - ax(start))} height=${H} fill="var(--bms-warn)" opacity="0.18"></rect>` : nothing}
+      ${mode === "facade" ? svg`
         <rect x=${ax(orient - 90)} y="0" width=${Math.max(0, ax(orient + 90) - ax(orient - 90))} height=${H} fill="url(#facade)"></rect>
         <line x1=${ax(orient)} x2=${ax(orient)} y1="0" y2=${H} stroke="var(--bms-warn)" stroke-width="1.5" stroke-dasharray="3 3"></line>` : nothing}
-      ${mode === "nad_obzorem" && paths?.today.length ? svg`
+      ${mode === "daylight" && paths?.today.length ? svg`
         <polygon points="${ax(paths.today[0][0])},${H} ${line(paths.today)} ${ax(paths.today.at(-1)![0])},${H}" fill="var(--bms-warn)" opacity="0.18"></polygon>` : nothing}
       <line x1="0" x2=${W} y1=${H} y2=${H} stroke="var(--bms-border)"></line>
       ${[90, 180, 270].map((a) => svg`<line x1=${ax(a)} x2=${ax(a)} y1="0" y2=${H} stroke="var(--bms-border)" stroke-dasharray="2 4"></line>`)}
@@ -331,14 +331,14 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     const t = this.t;
     const mode = this.sunMode;
     const paths = this.snap.sun_paths;
-    const coverage = mode === "okno" && paths
-      ? (["winter", "today", "summer"] as const).map((k) => sunCoverage(paths[k], this.num("solarni_start"), this.num("solarni_konec")))
+    const coverage = mode === "window" && paths
+      ? (["winter", "today", "summer"] as const).map((k) => sunCoverage(paths[k], this.num("solar_window_start"), this.num("solar_window_end")))
       : null;
     const uneven = coverage ? Math.max(...coverage) - Math.min(...coverage) > 0.2 : false;
     return html`<div class="item-details sun">
       <div class="seg" role="group" aria-label=${t("sun.mode")}>
         ${SUN_MODES.map((m) => html`<button aria-pressed=${m === mode} ?disabled=${!this.ctx.editable}
-          @click=${() => m !== mode && this.setSetting("slunce_rezim", m, t("sun.mode"))}>${t(`sun.mode.${m}`)}</button>`)}
+          @click=${() => m !== mode && this.setSetting("sun_mode", m, t("sun.mode"))}>${t(`sun.mode.${m}`)}</button>`)}
       </div>
       <div class="hint">${t(`sun.hint.${mode}`)}</div>
       ${this.sunDiagram(mode)}
@@ -347,22 +347,22 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
       })}${uneven ? html` ${t("sun.coverage_tip")}` : nothing}</div>` : nothing}
       <div class="dgrid">
         <div>
-          ${mode === "okno" ? html`
-            <bms-number .ctx=${this.ctx} key="solarni_start" label=${t("setting.solarni_start")}></bms-number>
-            <bms-number .ctx=${this.ctx} key="solarni_konec" label=${t("setting.solarni_konec")}></bms-number>` : nothing}
-          ${mode === "fasada" ? html`<bms-number .ctx=${this.ctx} key="slunce_orientace" label=${t("setting.slunce_orientace")}></bms-number>` : nothing}
-          <bms-number .ctx=${this.ctx} key="slunce_max_eff" label=${t("influences.max")}></bms-number>
+          ${mode === "window" ? html`
+            <bms-number .ctx=${this.ctx} key="solar_window_start" label=${t("setting.solar_window_start")}></bms-number>
+            <bms-number .ctx=${this.ctx} key="solar_window_end" label=${t("setting.solar_window_end")}></bms-number>` : nothing}
+          ${mode === "facade" ? html`<bms-number .ctx=${this.ctx} key="sun_orientation" label=${t("setting.sun_orientation")}></bms-number>` : nothing}
+          <bms-number .ctx=${this.ctx} key="sun_max_effect" label=${t("influences.max")}></bms-number>
         </div>
         <div>
-          <bms-toggle .ctx=${this.ctx} key="slunce_predpoved" label=${t("influences.use_forecast")} name=${t("influences.sun")}></bms-toggle>
-          <bms-number .ctx=${this.ctx} key="slunce_predpoved_hodin" label=${t("influences.horizon")}></bms-number>
+          <bms-toggle .ctx=${this.ctx} key="sun_forecast" label=${t("influences.use_forecast")} name=${t("influences.sun")}></bms-toggle>
+          <bms-number .ctx=${this.ctx} key="sun_forecast_hours" label=${t("influences.horizon")}></bms-number>
         </div>
       </div>
     </div>`;
   }
 
   private rowFor(id: ItemId) {
-    return id === "slunce" ? this.sunRow() : this.weatherRow(id);
+    return id === "sun" ? this.sunRow() : this.weatherRow(id);
   }
 
   protected render() {
@@ -371,7 +371,7 @@ export class BmsInfluencesSection extends BmsSection<SectionOptions["influences"
     const el = this as unknown as Element;
     const items = this.options.items;
     // Slunce zůstává vidět i bez účinku (noc) — jinak by jeho nastavení nebylo k nalezení.
-    const active = items.filter((id) => this.isActive(id) || this.open.has(id) || (id === "slunce" && this.on("vliv_slunce")));
+    const active = items.filter((id) => this.isActive(id) || this.open.has(id) || (id === "sun" && this.on("influence_sun")));
     const rest = items.filter((id) => !active.includes(id));
     const chartAllowed = this.options.chart && !config.compact;
     return html`

@@ -48,7 +48,7 @@ class HeatingCurveFlow(ConfigFlow, domain=DOMAIN):
     """Průvodce nastavením BMS regulátoru."""
 
     VERSION = 1
-    MINOR_VERSION = 2
+    MINOR_VERSION = 3
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
@@ -76,9 +76,9 @@ class HeatingCurveFlow(ConfigFlow, domain=DOMAIN):
 # Nastavení regulace dostupná i v Možnostech integrace (stejné hodnoty jako entity number/switch/select)
 OPTION_KEYS = (
     "limit_min", "limit_max", "safe_temp", "safe_curve_temp",
-    "prepocet_rezim", "prepocet_interval", "prepocet_delta",
-    "pouziti_predpovedi", "predpoved_hodin",
-    "slunce_rezim", "slunce_orientace", "slunce_predpoved", "slunce_predpoved_hodin",
+    "recalc_mode", "recalc_interval", "recalc_delta",
+    "curve_forecast", "curve_forecast_hours",
+    "sun_mode", "sun_orientation", "sun_forecast", "sun_forecast_hours",
 )
 
 

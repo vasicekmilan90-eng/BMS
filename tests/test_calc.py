@@ -57,14 +57,14 @@ def test_compute_sun_modes() -> None:
     base = {"sun_elevation": 17.0, "sun_azimuth": 180.0, "clouds": 50.0, "sun_noon_elevation": 17.0}
     window = calc.compute(_inp(**base))
     assert window.corr_sun == pytest.approx(-2 * (17 / 30) * 0.5)
-    daylight = calc.compute(_inp(**base, settings={"slunce_rezim": "nad_obzorem"}))
+    daylight = calc.compute(_inp(**base, settings={"sun_mode": "daylight"}))
     assert daylight.corr_sun == pytest.approx(-1.0) and daylight.sun_factor == pytest.approx(1)
-    facade = calc.compute(_inp(**base, settings={"slunce_rezim": "fasada", "slunce_orientace": 270}))
+    facade = calc.compute(_inp(**base, settings={"sun_mode": "facade", "sun_orientation": 270}))
     assert facade.corr_sun == 0
-    off = calc.compute(_inp(**base, settings={"vliv_slunce": False, "slunce_rezim": "nad_obzorem"}))
+    off = calc.compute(_inp(**base, settings={"influence_sun": False, "sun_mode": "daylight"}))
     assert off.corr_sun == 0 and off.sun_factor == pytest.approx(1)
     # oblačnost v čase polohy slunce má přednost před aktuální
-    cloudy = calc.compute(_inp(**base, sun_clouds=100.0, settings={"slunce_rezim": "nad_obzorem"}))
+    cloudy = calc.compute(_inp(**base, sun_clouds=100.0, settings={"sun_mode": "daylight"}))
     assert cloudy.corr_sun == 0
 
 
@@ -143,5 +143,5 @@ def test_compute_safe_mode_uses_safe_point() -> None:
 
 
 def test_compute_bypass_flag() -> None:
-    result = calc.compute(_inp(raw_outdoor=19, settings={"letni_bypass": True}))
+    result = calc.compute(_inp(raw_outdoor=19, settings={"summer_bypass": True}))
     assert result.bypass_active

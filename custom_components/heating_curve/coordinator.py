@@ -66,7 +66,7 @@ from .const import (
     TEMP_SOURCE_WEATHER,
     WEATHER_DEBOUNCE,
 )
-from .settings import ALL_SETTINGS, NUMBER_SETTINGS, PROFILE_KEYS, coerce_setting, default_settings
+from .settings import ALL_SETTINGS, NUMBER_SETTINGS, PROFILE_KEYS, coerce_setting, default_settings, migrate_settings
 from .storage import BMSStore, migrate_legacy_profile
 
 SETTING_META = {
@@ -168,20 +168,20 @@ class BMSRegulator:
                 except (TypeError, ValueError):
                     continue
         if len(self.data["curve"]) < 2:
-            self.data["curve"] = [dict(p) for p in DEFAULT_SEASONAL_PROFILES["Jaro/Podzim"]]
+            self.data["curve"] = [dict(p) for p in DEFAULT_SEASONAL_PROFILES["Spring/Autumn"]]
         self._migrate_sun_forecast()
 
     def _migrate_sun_forecast(self) -> None:
         """0.4: slunce má vlastní přepínač předpovědi — převezme dosavadní společný (křivka i slunce)."""
         changed = False
         stored = self.data["settings"]
-        if "slunce_predpoved" not in stored and "pouziti_predpovedi" in stored:
-            stored["slunce_predpoved"] = self.settings["slunce_predpoved"] = bool(stored["pouziti_predpovedi"])
+        if "sun_forecast" not in stored and "curve_forecast" in stored:
+            stored["sun_forecast"] = self.settings["sun_forecast"] = bool(stored["curve_forecast"])
             changed = True
         for profile in self.data["profiles"].values():
             settings = profile.get("settings", {})
-            if "slunce_predpoved" not in settings and "pouziti_predpovedi" in settings:
-                settings["slunce_predpoved"] = bool(settings["pouziti_predpovedi"])
+            if "sun_forecast" not in settings and "curve_forecast" in settings:
+                settings["sun_forecast"] = bool(settings["curve_forecast"])
                 changed = True
         if changed:
             self.store.async_delay_save()
@@ -261,7 +261,7 @@ class BMSRegulator:
         entity = self.setting_entities.get(key)
         if entity is not None and entity.hass is not None:
             entity.async_write_ha_state()
-        if key == "prepocet_interval":
+        if key == "recalc_interval":
             self._schedule_interval()
         if recompute:
             self._display_debouncer.async_schedule_call()
@@ -272,15 +272,15 @@ class BMSRegulator:
     def _schedule_interval(self) -> None:
         if self._unsub_interval:
             self._unsub_interval()
-        minutes = max(1, int(self.settings["prepocet_interval"]))
+        minutes = max(1, int(self.settings["recalc_interval"]))
         self._next_tick = dt_util.utcnow() + timedelta(minutes=minutes)
         self._unsub_interval = async_track_time_interval(
             self.hass, self._async_interval_tick, timedelta(minutes=minutes), name="BMS přepočet"
         )
 
     async def _async_interval_tick(self, _now: datetime) -> None:
-        self._next_tick = dt_util.utcnow() + timedelta(minutes=max(1, int(self.settings["prepocet_interval"])))
-        write = self.settings["prepocet_rezim"] in (MODE_TIME, MODE_BOTH)
+        self._next_tick = dt_util.utcnow() + timedelta(minutes=max(1, int(self.settings["recalc_interval"])))
+        write = self.settings["recalc_mode"] in (MODE_TIME, MODE_BOTH)
         await self.async_recompute(write=write, reason="interval")
 
     @callback
@@ -294,10 +294,10 @@ class BMSRegulator:
             return
         if event.data["entity_id"] == self.entry.data.get(CONF_WEATHER):
             self._weather_debouncer.async_schedule_call()
-        if self.settings["prepocet_rezim"] in (MODE_TEMP, MODE_BOTH):
+        if self.settings["recalc_mode"] in (MODE_TEMP, MODE_BOTH):
             outdoor, source = self._read_outdoor()
             last = self._last_write_outdoor
-            if source != TEMP_SOURCE_SAFE and (last is None or abs(outdoor - last) >= self.settings["prepocet_delta"]):
+            if source != TEMP_SOURCE_SAFE and (last is None or abs(outdoor - last) >= self.settings["recalc_delta"]):
                 self.entry.async_create_task(
                     self.hass, self.async_recompute(write=True, reason="hysteresis"), "bms_hysteresis"
                 )
@@ -486,7 +486,7 @@ class BMSRegulator:
 
             write_status: str | None = None
             if write:
-                if not self.settings["hlavni_vypinac"]:
+                if not self.settings["main_switch"]:
                     write_status = "disabled"
                 elif result.bypass_active:
                     write_status = "bypass"
@@ -515,24 +515,24 @@ class BMSRegulator:
             point = calc.forecast_at(self.forecast, now_ts + (float(hours) + extra_hours) * 3600)
             return None if point is None else point.get(key)
 
-        forecast_temp = forecast_value(s["predpoved_hodin"], "temp")
-        outdoor = forecast_temp if s["pouziti_predpovedi"] and forecast_temp is not None else raw_outdoor
+        forecast_temp = forecast_value(s["curve_forecast_hours"], "temp")
+        outdoor = forecast_temp if s["curve_forecast"] and forecast_temp is not None else raw_outdoor
 
         applied: dict[str, float] = {}
         forecasts: dict[str, float | None] = {}
         for key, cfg in INFLUENCES.items():
             value_key = cfg["value"]
-            fc = forecast_value(s[f"{key}_predpoved_hodin"], value_key)
+            fc = forecast_value(s[f"{key}_forecast_hours"], value_key)
             forecasts[value_key] = fc
-            applied[value_key] = fc if s[f"{key}_predpoved"] and fc is not None else actual[value_key]
+            applied[value_key] = fc if s[f"{key}_forecast"] and fc is not None else actual[value_key]
 
         actual_el, actual_az = self._sun_position(now)
-        sun_fc_when = now + timedelta(hours=float(s["slunce_predpoved_hodin"]) + extra_hours)
+        sun_fc_when = now + timedelta(hours=float(s["sun_forecast_hours"]) + extra_hours)
         fc_el, fc_az = self._sun_position(sun_fc_when)
-        use_sun_fc = bool(s["slunce_predpoved"])
+        use_sun_fc = bool(s["sun_forecast"])
         sun_el, sun_az = (fc_el, fc_az) if use_sun_fc else (actual_el, actual_az)
         # oblačnost pro slunce ze stejného okamžiku jako poloha slunce
-        sun_clouds = forecast_value(s["slunce_predpoved_hodin"], "clouds") if use_sun_fc else None
+        sun_clouds = forecast_value(s["sun_forecast_hours"], "clouds") if use_sun_fc else None
         if sun_clouds is None:
             sun_clouds = actual["clouds"]
 
@@ -790,10 +790,24 @@ class BMSRegulator:
 
     # ── Profily ───────────────────────────────────────────────────────────────
     @property
+    def default_profile(self) -> str:
+        """Název výchozího profilu (bez uložených hodnot), uživatel ho může přejmenovat."""
+        return self.data.get("default_profile") or DEFAULT_PROFILE
+
+    @property
     def profile_names(self) -> list[str]:
-        return [DEFAULT_PROFILE, *sorted(k for k in self.data["profiles"] if k != DEFAULT_PROFILE)]
+        default = self.default_profile
+        return [default, *sorted(k for k in self.data["profiles"] if k != default)]
+
+    def _reserved(self, name: str) -> None:
+        if name == self.default_profile:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="profile_name_reserved",
+                translation_placeholders={"name": name},
+            )
 
     async def async_save_profile(self, name: str) -> None:
+        self._reserved(name)
         self.data["profiles"][name] = {
             "settings": {k: self.settings[k] for k in PROFILE_KEYS},
             "curve": copy.deepcopy(self.data["curve"]),
@@ -803,7 +817,7 @@ class BMSRegulator:
         self.async_notify()
 
     async def async_load_profile(self, name: str, *, source: str = "manual") -> None:
-        if name != DEFAULT_PROFILE:
+        if name != self.default_profile:
             profile = self.data["profiles"].get(name)
             if profile is None:
                 raise ServiceValidationError(
@@ -831,14 +845,23 @@ class BMSRegulator:
 
     async def async_rename_profile(self, name: str, new_name: str) -> None:
         profiles = self.data["profiles"]
-        if name not in profiles:
+        if new_name == name:
+            return
+        if name == self.default_profile:
+            if new_name in profiles:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="profile_exists",
+                    translation_placeholders={"name": new_name},
+                )
+            self.data["default_profile"] = new_name
+        elif name not in profiles:
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="profile_not_found",
                 translation_placeholders={"name": name},
             )
-        if new_name == name:
-            return
-        profiles[new_name] = profiles.pop(name)
+        else:
+            self._reserved(new_name)
+            profiles[new_name] = profiles.pop(name)
         if self.data["active_profile"] == name:
             self.data["active_profile"] = new_name
         self.data["starred"] = [new_name if s == name else s for s in self.data["starred"]]
@@ -854,7 +877,7 @@ class BMSRegulator:
             return
         del self.data["profiles"][name]
         if self.data["active_profile"] == name:
-            self.data["active_profile"] = DEFAULT_PROFILE
+            self.data["active_profile"] = self.default_profile
         self.data["starred"] = [s for s in self.data["starred"] if s != name]
         await self.store.async_save()
         self.hass.bus.async_fire(
@@ -863,7 +886,7 @@ class BMSRegulator:
         self.async_notify()
 
     async def async_set_starred(self, names: list[str]) -> None:
-        valid = set(self.data["profiles"]) | {DEFAULT_PROFILE}
+        valid = set(self.data["profiles"]) | {self.default_profile}
         self.data["starred"] = [n for n in names if n in valid][:15]
         await self.store.async_save()
         self.hass.bus.async_fire(EVENT_PROFILES_CHANGED)
@@ -886,12 +909,12 @@ class BMSRegulator:
             raise ValueError("Soubor neobsahuje profily")
         imported: list[str] = []
         for name, raw in profiles.items():
-            if not isinstance(name, str) or not name.strip() or name == DEFAULT_PROFILE or not isinstance(raw, dict):
+            if not isinstance(name, str) or not name.strip() or name == self.default_profile or not isinstance(raw, dict):
                 continue
             if "settings" not in raw:
                 raw = migrate_legacy_profile(raw)
             settings: dict[str, Any] = {}
-            for key, value in (raw.get("settings") or {}).items():
+            for key, value in migrate_settings(raw.get("settings") or {}).items():
                 if key in PROFILE_KEYS:
                     try:
                         settings[key] = coerce_setting(key, value)
@@ -909,7 +932,7 @@ class BMSRegulator:
                 r for r in payload["schedules"] if isinstance(r, dict) and r.get("id") and r["id"] not in known
             )
         if isinstance(payload.get("starred"), list):
-            valid = set(self.data["profiles"]) | {DEFAULT_PROFILE}
+            valid = set(self.data["profiles"]) | {self.default_profile}
             merged = [*self.data["starred"], *(n for n in payload["starred"] if n not in self.data["starred"])]
             self.data["starred"] = [n for n in merged if n in valid][:15]
         await self.store.async_save()
@@ -924,7 +947,7 @@ class BMSRegulator:
             "id": rule_data.get("id") or uuid.uuid4().hex[:8],
             "enabled": rule_data.get("enabled", True),
             "type": rule_data.get("type", "date"),
-            "profile": rule_data.get("profile", DEFAULT_PROFILE),
+            "profile": rule_data.get("profile", self.default_profile),
             "date_from": rule_data.get("date_from", ""),
             "date_to": rule_data.get("date_to", ""),
             "temp_op": rule_data.get("temp_op", "<"),
@@ -961,7 +984,7 @@ class BMSRegulator:
 
     def _matching_rule(self) -> dict[str, Any] | None:
         today = dt_util.now().strftime("%m-%d")
-        valid = set(self.data["profiles"]) | {DEFAULT_PROFILE}
+        valid = set(self.data["profiles"]) | {self.default_profile}
         for rule in self.data["schedules"]:
             if not rule.get("enabled", True) or rule.get("profile") not in valid:
                 continue
@@ -1182,7 +1205,7 @@ class BMSRegulator:
             "curve": self.data["curve"],
             "storage_ok": self.store.ok,
             "profiles": self.profile_names,
-            "system_profiles": list(DEFAULT_SEASONAL_PROFILES),
+            "system_profiles": [n for n in DEFAULT_SEASONAL_PROFILES if n in self.data["profiles"]],
             "active_profile": self.data["active_profile"],
             "starred": self.data["starred"],
             "schedules": self.data["schedules"],

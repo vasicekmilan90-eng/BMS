@@ -49,7 +49,7 @@ export function sectionSummary(id: SectionId, snap: Snapshot, t: Translator, lan
     case "settings":
       return t("summary.settings", {
         min: formatNumber(Number(snap.settings.limit_min), lang, 0), max: formatNumber(Number(snap.settings.limit_max), lang, 0),
-        interval: formatNumber(Number(snap.settings.prepocet_interval), lang, 0),
+        interval: formatNumber(Number(snap.settings.recalc_interval), lang, 0),
       });
   }
 }
