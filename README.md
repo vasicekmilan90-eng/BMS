@@ -1,7 +1,7 @@
 # Chytrý ekvitermní regulátor (BMS)
 
 Integrace pro Home Assistant, která počítá teplotu topné vody podle ekvitermní křivky,
-koriguje ji vlivy počasí (vítr, srážky, vlhkost, oblačnost, slunce), nočním módem,
+koriguje ji vlivy počasí (vítr, srážky, vlhkost, oblačnost, slunce), nočním režimem,
 protimrazovou ochranou a boostem/útlumem a výsledek zapisuje do termostatu.
 Součástí integrace je vlastní Lovelace karta **BMS Regulátor vytápění** (`custom:bms-master-card`).
 
@@ -30,7 +30,7 @@ Najdete je v *Přidat kartu* pod názvem „BMS …“. Všechny mají vizuáln�
 | `custom:bms-master-card` | celý regulátor — předvolby, sekce a jejich volby |
 | `custom:bms-status-card` | výsledná teplota, hodnota na termostatu, proč právě tahle teplota, upozornění |
 | `custom:bms-actions-card` | Přitopit / Ubrat (jiná hodnota podržením, +1 hodina) a rychlé profily |
-| `custom:bms-automations-card` | protimraz, noční útlum, letní bypass |
+| `custom:bms-automations-card` | protimraz, noční režim, letní bypass |
 | `custom:bms-profiles-card` | rychlé profily, správa profilů, časové plány |
 | `custom:bms-curve-card` | graf a editor topné křivky, simulace „co kdyby“ |
 | `custom:bms-influences-card` | vlivy počasí a slunce s grafem |

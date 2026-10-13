@@ -50,7 +50,7 @@ NUMBER_SETTINGS: tuple[NumberSetting, ...] = (
     NumberSetting("slunce_predpoved_hodin",    1, 48, 1, 6, _H),
     NumberSetting("frost_threshold",      -20, 5,   0.5, -5.0, _C),
     NumberSetting("frost_min_heat",       20,  60,  0.5, 35.0, _C),
-    NumberSetting("night_offset",         -15, 0,   0.5, -5.0, _C),
+    NumberSetting("night_offset",         -15, 15,  0.5, -5.0, _C),
     NumberSetting("day_start",            0,   23,  1,   6,    _H),
     NumberSetting("day_end",              0,   23,  1,   22,   _H),
     NumberSetting("boost_amount",         0.5, 20,  0.5, 5.0,  _C),

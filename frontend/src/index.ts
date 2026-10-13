@@ -31,7 +31,7 @@ const CARDS: [string, CustomElementConstructor, string, string, boolean][] = [
   ["bms-master-card", BmsCard, "BMS Regulátor vytápění", "Celý regulátor — předvolby, sekce a jejich volby v editoru.", true],
   ["bms-status-card", BmsStatusCard, "BMS – Stav regulace", "Výsledná teplota, termostat, rozpad výpočtu a upozornění.", true],
   ["bms-actions-card", BmsActionsCard, "BMS – Rychlé akce", "Boost, útlum a rychlé profily.", true],
-  ["bms-automations-card", BmsAutomationsCard, "BMS – Automatiky", "Protimraz, noční útlum a letní bypass.", true],
+  ["bms-automations-card", BmsAutomationsCard, "BMS – Automatiky", "Protimraz, noční režim a letní bypass.", true],
   ["bms-profiles-card", BmsProfilesCard, "BMS – Profily a plány", "Rychlé profily, správa profilů a časové plány.", true],
   ["bms-curve-card", BmsCurveCard, "BMS – Topná křivka", "Graf, editor a simulace topné křivky.", true],
   ["bms-influences-card", BmsInfluencesCard, "BMS – Vlivy počasí", "Vlivy počasí a slunce s grafem.", true],
