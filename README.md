@@ -219,6 +219,10 @@ For example, the wind forecast horizon is `number.bms_wind_forecast_hours`.
 Seasonal settings (curve, influences, forecasts, night mode, frost protection, boost defaults) are
 part of **profiles**. Integration settings (limits, recalculation, bypass) are not.
 
+The integration starts with the profiles *Winter*, *Spring/Autumn* and *Summer*, plus *Default*, which
+keeps the current settings without loading any stored values. All of them can be renamed in the card
+or with `heating_curve.rename_profile`.
+
 ## Actions
 
 All actions are in the `heating_curve` domain.
@@ -313,8 +317,6 @@ script:
 - Schedules switch whole profiles by date or by average temperature; there are no time-of-day rules.
   Use Home Assistant automations with `number.set_value` / `switch.turn_on` for that.
 - Changing a profile setting from an automation marks the active profile as modified.
-- The built-in profile names are Czech (*Výchozí* = default, *Zima* = winter, *Jaro/Podzim* =
-  spring/autumn, *Léto* = summer). The seasonal ones can be renamed in the card.
 
 ## Troubleshooting
 
@@ -351,8 +353,9 @@ after reinstalling. Delete that file to start fresh. Remove any BMS cards from y
 Entity IDs and setting keys changed from Czech to English (e.g. `switch.bms_hlavni_vypinac` →
 `switch.bms_main_switch`, `number.bms_vitr_od` → `number.bms_wind_from`). Entities, stored settings and
 profiles are migrated automatically and keep their history, and card configurations with the old
-influence names (`vitr`, `srazky`, …) keep working. Update your own automations, scripts and dashboard
-cards that reference the old entity IDs.
+influence names (`vitr`, `srazky`, …) keep working. The built-in profiles are renamed to *Default*,
+*Winter*, *Spring/Autumn* and *Summer* unless a profile with the new name already exists. Update your
+own automations, scripts and dashboard cards that reference the old entity IDs.
 
 ### From a manual card setup
 

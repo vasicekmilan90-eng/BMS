@@ -90,7 +90,7 @@ export class BmsAutomationsSection extends BmsSection<SectionOptions["automation
           ${item === "night" ? this.dayBar() : nothing}
           <div class="controls">${meta.numbers.map((key) =>
             html`<bms-number .ctx=${this.ctx} key=${key} label=${t(`setting.${key}`)}></bms-number>`)}</div>
-          ${item === "night" ? html`<div class="small muted">${t("auto.night_hint")}</div>` : nothing}
+          <div class="small muted">${t(`auto.${item}_hint`)}</div>
         </div>` : nothing}`;
       })}
       ${canEdit ? html`<div class="footer">

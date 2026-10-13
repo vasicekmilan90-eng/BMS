@@ -147,6 +147,8 @@
   "auto.active_now": "now",
   "auto.disabled": "Off",
   "auto.day_bar": "Day from {start} to {end} h, the rest is night mode",
+  "auto.frost_hint": "When the measured outdoor temperature drops to the threshold or below, the flow temperature does not go below the minimum heating — not even with weather corrections, night mode or a reduction. Protects the pipes and the building from freezing.",
+  "auto.bypass_hint": "From the given outdoor temperature the controller stops setting the thermostat, which keeps its own setting (e.g. off in summer). Calculation and display continue; below this temperature the thermostat is set again.",
   "auto.night_hint": "A negative change lowers the temperature at night, a positive one raises it. The mode applies from night start to night end, also across midnight. The forecast extension shifts all enabled forecasts further ahead at night, so the control catches the morning weather in time.",
 
   "log.empty": "No entries yet — the log fills up each time the thermostat is set.",

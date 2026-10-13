@@ -149,7 +149,9 @@ Náhled karty bez Home Assistantu: `python -m http.server` v kořeni repozitář
 ID entit a klíče nastavení jsou anglicky (např. `switch.bms_hlavni_vypinac` → `switch.bms_main_switch`,
 `number.bms_vitr_od` → `number.bms_wind_from`). Entity, uložená nastavení i profily se převedou
 automaticky a zachovají si historii; konfigurace karet se starými názvy vlivů (`vitr`, `srazky`, …)
-funguje dál. Vlastní automatizace, skripty a karty, které odkazují na stará ID entit, je potřeba upravit.
+funguje dál. Výchozí profily se přejmenují na *Default*, *Winter*, *Spring/Autumn* a *Summer* (pokud profil
+s novým názvem už neexistuje); všechny včetně *Default* si můžete v kartě přejmenovat zpět.
+Vlastní automatizace, skripty a karty, které odkazují na stará ID entit, je potřeba upravit.
 
 ## Přechod ze staršího ručního nasazení
 

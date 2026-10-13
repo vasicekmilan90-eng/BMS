@@ -32,7 +32,7 @@ FRONTEND_URL_BASE = f"/{DOMAIN}"
 CARD_FILENAME     = "bms-master-card.js"
 
 DEVICE_NAME     = "BMS"
-DEFAULT_PROFILE = "Výchozí"
+DEFAULT_PROFILE = "Default"
 
 # ── Úložiště ──────────────────────────────────────────────────────────────────
 STORE_KEY     = f"{DOMAIN}.data"
@@ -47,20 +47,22 @@ DEFAULT_CURVE_POINTS = [
 ]
 
 DEFAULT_SEASONAL_PROFILES: dict[str, list[dict[str, float]]] = {
-    "Zima": [
+    "Winter": [
         {"x": -20, "y": 75}, {"x": -10, "y": 65}, {"x": 0, "y": 55},
         {"x": 10,  "y": 42}, {"x": 20,  "y": 30},
     ],
-    "Jaro/Podzim": [
+    "Spring/Autumn": [
         {"x": -20, "y": 65}, {"x": -10, "y": 55}, {"x": 0, "y": 43},
         {"x": 10,  "y": 32}, {"x": 20,  "y": 20},
     ],
-    "Léto": [
+    "Summer": [
         {"x": -20, "y": 55}, {"x": -10, "y": 44}, {"x": 0, "y": 34},
         {"x": 10,  "y": 25}, {"x": 20,  "y": 18},
     ],
 }
 DEFAULT_STARRED = list(DEFAULT_SEASONAL_PROFILES)
+# Názvy výchozích profilů do verze 0.5
+LEGACY_PROFILE_NAMES = {"Výchozí": DEFAULT_PROFILE, "Zima": "Winter", "Jaro/Podzim": "Spring/Autumn", "Léto": "Summer"}
 
 # ── Zdroj venkovní teploty ────────────────────────────────────────────────────
 TEMP_SOURCE_SENSOR  = "sensor"

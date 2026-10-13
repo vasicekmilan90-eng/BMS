@@ -147,6 +147,8 @@
   "auto.active_now": "teď",
   "auto.disabled": "Vypnuto",
   "auto.day_bar": "Den od {start} do {end} h, zbytek je noční režim",
+  "auto.frost_hint": "Když naměřená venkovní teplota klesne na práh nebo pod něj, topná voda neklesne pod minimální topení — ani při korekcích počasí, nočním režimu nebo útlumu. Chrání rozvody a dům před promrznutím.",
+  "auto.bypass_hint": "Od zadané venkovní teploty regulátor termostat nenastavuje a ten si ponechá vlastní nastavení (např. v létě vypnuto). Výpočet a zobrazení běží dál; pod touto teplotou se termostat zase nastavuje.",
   "auto.night_hint": "Záporná změna teplotu v noci sníží, kladná zvýší. Režim platí od začátku do konce noci, i přes půlnoc. Prodloužení předpovědi v noci posune všechny zapnuté předpovědi o zadaný počet hodin dál, aby regulace včas zachytila ranní počasí.",
 
   "log.empty": "Zatím žádné záznamy — log se plní při každém nastavení termostatu.",

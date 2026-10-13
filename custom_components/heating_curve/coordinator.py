@@ -168,7 +168,7 @@ class BMSRegulator:
                 except (TypeError, ValueError):
                     continue
         if len(self.data["curve"]) < 2:
-            self.data["curve"] = [dict(p) for p in DEFAULT_SEASONAL_PROFILES["Jaro/Podzim"]]
+            self.data["curve"] = [dict(p) for p in DEFAULT_SEASONAL_PROFILES["Spring/Autumn"]]
         self._migrate_sun_forecast()
 
     def _migrate_sun_forecast(self) -> None:
@@ -790,10 +790,24 @@ class BMSRegulator:
 
     # ── Profily ───────────────────────────────────────────────────────────────
     @property
+    def default_profile(self) -> str:
+        """Název výchozího profilu (bez uložených hodnot), uživatel ho může přejmenovat."""
+        return self.data.get("default_profile") or DEFAULT_PROFILE
+
+    @property
     def profile_names(self) -> list[str]:
-        return [DEFAULT_PROFILE, *sorted(k for k in self.data["profiles"] if k != DEFAULT_PROFILE)]
+        default = self.default_profile
+        return [default, *sorted(k for k in self.data["profiles"] if k != default)]
+
+    def _reserved(self, name: str) -> None:
+        if name == self.default_profile:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="profile_name_reserved",
+                translation_placeholders={"name": name},
+            )
 
     async def async_save_profile(self, name: str) -> None:
+        self._reserved(name)
         self.data["profiles"][name] = {
             "settings": {k: self.settings[k] for k in PROFILE_KEYS},
             "curve": copy.deepcopy(self.data["curve"]),
@@ -803,7 +817,7 @@ class BMSRegulator:
         self.async_notify()
 
     async def async_load_profile(self, name: str, *, source: str = "manual") -> None:
-        if name != DEFAULT_PROFILE:
+        if name != self.default_profile:
             profile = self.data["profiles"].get(name)
             if profile is None:
                 raise ServiceValidationError(
@@ -831,14 +845,23 @@ class BMSRegulator:
 
     async def async_rename_profile(self, name: str, new_name: str) -> None:
         profiles = self.data["profiles"]
-        if name not in profiles:
+        if new_name == name:
+            return
+        if name == self.default_profile:
+            if new_name in profiles:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="profile_exists",
+                    translation_placeholders={"name": new_name},
+                )
+            self.data["default_profile"] = new_name
+        elif name not in profiles:
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="profile_not_found",
                 translation_placeholders={"name": name},
             )
-        if new_name == name:
-            return
-        profiles[new_name] = profiles.pop(name)
+        else:
+            self._reserved(new_name)
+            profiles[new_name] = profiles.pop(name)
         if self.data["active_profile"] == name:
             self.data["active_profile"] = new_name
         self.data["starred"] = [new_name if s == name else s for s in self.data["starred"]]
@@ -854,7 +877,7 @@ class BMSRegulator:
             return
         del self.data["profiles"][name]
         if self.data["active_profile"] == name:
-            self.data["active_profile"] = DEFAULT_PROFILE
+            self.data["active_profile"] = self.default_profile
         self.data["starred"] = [s for s in self.data["starred"] if s != name]
         await self.store.async_save()
         self.hass.bus.async_fire(
@@ -863,7 +886,7 @@ class BMSRegulator:
         self.async_notify()
 
     async def async_set_starred(self, names: list[str]) -> None:
-        valid = set(self.data["profiles"]) | {DEFAULT_PROFILE}
+        valid = set(self.data["profiles"]) | {self.default_profile}
         self.data["starred"] = [n for n in names if n in valid][:15]
         await self.store.async_save()
         self.hass.bus.async_fire(EVENT_PROFILES_CHANGED)
@@ -886,7 +909,7 @@ class BMSRegulator:
             raise ValueError("Soubor neobsahuje profily")
         imported: list[str] = []
         for name, raw in profiles.items():
-            if not isinstance(name, str) or not name.strip() or name == DEFAULT_PROFILE or not isinstance(raw, dict):
+            if not isinstance(name, str) or not name.strip() or name == self.default_profile or not isinstance(raw, dict):
                 continue
             if "settings" not in raw:
                 raw = migrate_legacy_profile(raw)
@@ -909,7 +932,7 @@ class BMSRegulator:
                 r for r in payload["schedules"] if isinstance(r, dict) and r.get("id") and r["id"] not in known
             )
         if isinstance(payload.get("starred"), list):
-            valid = set(self.data["profiles"]) | {DEFAULT_PROFILE}
+            valid = set(self.data["profiles"]) | {self.default_profile}
             merged = [*self.data["starred"], *(n for n in payload["starred"] if n not in self.data["starred"])]
             self.data["starred"] = [n for n in merged if n in valid][:15]
         await self.store.async_save()
@@ -924,7 +947,7 @@ class BMSRegulator:
             "id": rule_data.get("id") or uuid.uuid4().hex[:8],
             "enabled": rule_data.get("enabled", True),
             "type": rule_data.get("type", "date"),
-            "profile": rule_data.get("profile", DEFAULT_PROFILE),
+            "profile": rule_data.get("profile", self.default_profile),
             "date_from": rule_data.get("date_from", ""),
             "date_to": rule_data.get("date_to", ""),
             "temp_op": rule_data.get("temp_op", "<"),
@@ -961,7 +984,7 @@ class BMSRegulator:
 
     def _matching_rule(self) -> dict[str, Any] | None:
         today = dt_util.now().strftime("%m-%d")
-        valid = set(self.data["profiles"]) | {DEFAULT_PROFILE}
+        valid = set(self.data["profiles"]) | {self.default_profile}
         for rule in self.data["schedules"]:
             if not rule.get("enabled", True) or rule.get("profile") not in valid:
                 continue
@@ -1182,7 +1205,7 @@ class BMSRegulator:
             "curve": self.data["curve"],
             "storage_ok": self.store.ok,
             "profiles": self.profile_names,
-            "system_profiles": list(DEFAULT_SEASONAL_PROFILES),
+            "system_profiles": [n for n in DEFAULT_SEASONAL_PROFILES if n in self.data["profiles"]],
             "active_profile": self.data["active_profile"],
             "starred": self.data["starred"],
             "schedules": self.data["schedules"],

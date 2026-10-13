@@ -55,7 +55,7 @@ async def test_setup_entities_and_card(hass: HomeAssistant, setup_integration: M
     calc_state = hass.states.get("sensor.bms_calc_temp")
     assert calc_state.state == "42.0"  # křivka 3.5 °C → ~41 + korekce, limit 42
     assert calc_state.attributes["friendly_name"] == "BMS Resulting temperature"  # testy běží v en
-    assert hass.states.get("select.bms_curve_profile").attributes["options"][:1] == ["Výchozí"]
+    assert hass.states.get("select.bms_curve_profile").attributes["options"][:1] == ["Default"]
     assert hass.states.get("number.bms_limit_min").attributes["unit_of_measurement"] == "°C"
 
 
@@ -179,8 +179,8 @@ async def test_profiles(hass: HomeAssistant, setup_integration: MockConfigEntry)
     await hass.services.async_call(DOMAIN, "save_profile", {"name": "Test"}, blocking=True)
     assert "Test" in hass.states.get("select.bms_curve_profile").attributes["options"]
 
-    await hass.services.async_call(DOMAIN, "load_profile", {"name": "Zima"}, blocking=True)
-    assert hass.states.get("select.bms_curve_profile").state == "Zima"
+    await hass.services.async_call(DOMAIN, "load_profile", {"name": "Winter"}, blocking=True)
+    assert hass.states.get("select.bms_curve_profile").state == "Winter"
     assert reg.data["curve"][0]["y"] == 75
 
     await _set(hass, "number", "night_offset", -8)
@@ -196,22 +196,33 @@ async def test_profiles(hass: HomeAssistant, setup_integration: MockConfigEntry)
     assert hass.states.get("select.bms_curve_profile").state == "Test2"
     assert reg.data["starred"] == ["Test2"]
     await hass.services.async_call(DOMAIN, "delete_profile", {"name": "Test2"}, blocking=True)
-    assert hass.states.get("select.bms_curve_profile").state == "Výchozí"
+    assert hass.states.get("select.bms_curve_profile").state == "Default"
     assert reg.data["starred"] == []
+
+    await hass.services.async_call(DOMAIN, "rename_profile", {"name": "Default", "new_name": "Výchozí"}, blocking=True)
+    state = hass.states.get("select.bms_curve_profile")
+    assert state.state == "Výchozí" and state.attributes["options"][0] == "Výchozí"
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(DOMAIN, "save_profile", {"name": "Výchozí"}, blocking=True)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(DOMAIN, "rename_profile", {"name": "Výchozí", "new_name": "Winter"}, blocking=True)
+    await hass.services.async_call(DOMAIN, "rename_profile", {"name": "Winter", "new_name": "Zima"}, blocking=True)
+    options = hass.states.get("select.bms_curve_profile").attributes["options"]
+    assert "Zima" in options and "Winter" not in options
 
 
 async def test_schedule_respects_manual_choice(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
     today = dt_util.now().strftime("%m-%d")
     await hass.services.async_call(DOMAIN, "save_schedule", {
-        "type": "date", "profile": "Zima", "date_from": today, "date_to": today,
+        "type": "date", "profile": "Winter", "date_from": today, "date_to": today,
     }, blocking=True)
     await hass.async_block_till_done()
-    assert hass.states.get("select.bms_curve_profile").state == "Zima"
+    assert hass.states.get("select.bms_curve_profile").state == "Winter"
 
-    await hass.services.async_call(DOMAIN, "load_profile", {"name": "Léto"}, blocking=True)
+    await hass.services.async_call(DOMAIN, "load_profile", {"name": "Summer"}, blocking=True)
     await hass.services.async_call(DOMAIN, "force_refresh", {}, blocking=True)
     await hass.async_block_till_done()
-    assert hass.states.get("select.bms_curve_profile").state == "Léto"
+    assert hass.states.get("select.bms_curve_profile").state == "Summer"
 
 
 async def test_curve_services(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
@@ -309,7 +320,10 @@ async def test_legacy_migration(
 async def test_migrate_czech_keys(hass: HomeAssistant, hass_storage: dict[str, Any], weather: WeatherMock) -> None:
     hass_storage["heating_curve.data"] = {"version": 1, "minor_version": 1, "key": "heating_curve.data", "data": {
         "settings": {"hlavni_vypinac": False, "prepocet_rezim": "oboji", "slunce_rezim": "fasada", "vitr_do": 70},
-        "profiles": {"Moje": {"settings": {"vitr_od": 15, "vliv_slunce": False}, "curve": []}},
+        "profiles": {"Moje": {"settings": {"vitr_od": 15, "vliv_slunce": False}, "curve": []},
+                     "Zima": {"settings": {}, "curve": []}},
+        "active_profile": "Výchozí", "starred": ["Zima", "Výchozí"],
+        "schedules": [{"id": "a", "enabled": False, "type": "date", "profile": "Zima"}],
     }}
     set_inputs(hass)
     entry = MockConfigEntry(domain=DOMAIN, data=DATA, title="BMS", version=1, minor_version=2)
@@ -330,6 +344,9 @@ async def test_migrate_czech_keys(hass: HomeAssistant, hass_storage: dict[str, A
     assert reg.settings["recalc_mode"] == "both" and reg.settings["sun_mode"] == "facade"
     assert reg.settings["wind_to"] == 70
     assert reg.data["profiles"]["Moje"]["settings"] == {"wind_from": 15, "influence_sun": False}
+    assert set(reg.data["profiles"]) == {"Moje", "Winter"}
+    assert reg.data["active_profile"] == "Default" and reg.data["starred"] == ["Winter", "Default"]
+    assert reg.data["schedules"][0]["profile"] == "Winter"
     assert hass.states.get("select.bms_recalc_mode").state == "both"
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()

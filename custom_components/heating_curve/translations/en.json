@@ -107,6 +107,12 @@
     },
     "profile_not_found": {
       "message": "Profile \"{name}\" does not exist."
+    },
+    "profile_exists": {
+      "message": "Profile \"{name}\" already exists."
+    },
+    "profile_name_reserved": {
+      "message": "The name \"{name}\" is used by the default profile."
     }
   },
   "issues": {

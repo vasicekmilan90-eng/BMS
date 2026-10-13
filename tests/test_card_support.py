@@ -36,11 +36,11 @@ async def test_simulate(hass: HomeAssistant, setup_integration: MockConfigEntry)
 
 async def test_profile_modified_and_snapshot(hass: HomeAssistant, setup_integration: MockConfigEntry) -> None:
     reg = _reg(setup_integration)
-    await hass.services.async_call(DOMAIN, "load_profile", {"name": "Zima"}, blocking=True)
+    await hass.services.async_call(DOMAIN, "load_profile", {"name": "Winter"}, blocking=True)
     assert reg.snapshot()["profile_modified"] is False
     await reg.async_set_curve([{"x": -20, "y": 70}, {"x": 20, "y": 25}])
     assert reg.snapshot()["profile_modified"] is True
-    await hass.services.async_call(DOMAIN, "save_profile", {"name": "Zima"}, blocking=True)
+    await hass.services.async_call(DOMAIN, "save_profile", {"name": "Winter"}, blocking=True)
     snap = reg.snapshot()
     assert snap["profile_modified"] is False
     assert snap["thermostat"]["entity_id"] == "climate.kotel"
@@ -67,10 +67,10 @@ async def test_sun_forecast_split_migration(hass: HomeAssistant, setup_integrati
     assert hass.states.get("switch.bms_sun_forecast") is not None
     reg.data["settings"].pop("sun_forecast", None)
     reg.data["settings"]["curve_forecast"] = True
-    reg.data["profiles"]["Zima"]["settings"] = {"curve_forecast": True}
+    reg.data["profiles"]["Winter"]["settings"] = {"curve_forecast": True}
     reg._migrate_sun_forecast()
     assert reg.settings["sun_forecast"] is True
-    assert reg.data["profiles"]["Zima"]["settings"]["sun_forecast"] is True
+    assert reg.data["profiles"]["Winter"]["settings"]["sun_forecast"] is True
     # křivka a slunce už na sobě nezávisí
     reg.async_set_setting("curve_forecast", False)
     assert reg.settings["sun_forecast"] is True

@@ -54,7 +54,9 @@ export class BmsProfilesSection extends BmsSection<SectionOptions["profiles"]> {
     const t = this.t;
     const name = this.dialogName.trim();
     if (!name) return;
-    if (this.snap.profiles.includes(name) && name !== this.dialogFor
+    // Kolizi s výchozím profilem odmítne integrace, přepsání nemá smysl nabízet
+    const withDefault = this.isDefault(name) || (this.dialogMode === "rename" && this.isDefault(this.dialogFor));
+    if (!withDefault && this.snap.profiles.includes(name) && name !== this.dialogFor
       && !(await this.confirm(t("profiles.confirm_overwrite", { name }), undefined, t("profiles.overwrite")))) return;
     const store = this.ctx.store;
     const ok = await this.run(async () => {
@@ -125,7 +127,7 @@ export class BmsProfilesSection extends BmsSection<SectionOptions["profiles"]> {
     const starred = this.snap.starred.includes(name);
     const items: MenuItem[] = [];
     if (this.allowed("save") && !locked) items.push({ icon: "mdi:content-save-outline", label: t("profiles.save"), action: () => this.overwrite(name) });
-    if (this.allowed("rename") && !locked) items.push({ icon: "mdi:rename", label: t("profiles.rename"), action: () => this.openDialog("rename", name) });
+    if (this.allowed("rename")) items.push({ icon: "mdi:rename", label: t("profiles.rename"), action: () => this.openDialog("rename", name) });
     if (this.allowed("star")) {
       items.push({
         icon: starred ? "mdi:star-off-outline" : "mdi:star-outline", label: t(starred ? "profiles.unstar" : "profiles.star_add"),

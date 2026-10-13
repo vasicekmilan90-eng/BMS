@@ -107,6 +107,12 @@
     },
     "profile_not_found": {
       "message": "Profil „{name}“ neexistuje."
+    },
+    "profile_exists": {
+      "message": "Profil „{name}“ už existuje."
+    },
+    "profile_name_reserved": {
+      "message": "Název „{name}“ používá výchozí profil."
     }
   },
   "issues": {

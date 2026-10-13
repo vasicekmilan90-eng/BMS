@@ -25,7 +25,6 @@ from . import websocket
 from .const import (
     CARD_FILENAME,
     CONF_SUN,
-    DEFAULT_PROFILE,
     DOMAIN,
     EVENT_CURVE_RESPONSE,
     EVENT_FORCE_REFRESH_DONE,
@@ -56,7 +55,7 @@ SERVICE_SCHEMAS: dict[str, vol.Schema] = {
     "delete_profile":     _NAME_SCHEMA,
     "rename_profile":     vol.Schema({
         vol.Required("name"): cv.string,
-        vol.Required("new_name"): vol.All(cv.string, vol.Strip, vol.Length(min=1), vol.NotIn([DEFAULT_PROFILE])),
+        vol.Required("new_name"): vol.All(cv.string, vol.Strip, vol.Length(min=1)),
     }),
     "activate_boost":     _AMOUNT_HOURS_SCHEMA,
     "activate_reduction": _AMOUNT_HOURS_SCHEMA,
