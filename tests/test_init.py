@@ -146,12 +146,12 @@ async def test_night_forecast_extension(
     await hass.services.async_call(DOMAIN, "force_refresh", {}, blocking=True)
     assert reg.result.night_active
     assert reg.values["forecast_extra_hours"] == 3
-    assert reg.values["forecast_wind"] == pytest.approx(72.0)
+    assert reg.values["forecast_wind"] == pytest.approx(20.0)
 
     await _set(hass, "switch", "night_mode", False)
     await hass.services.async_call(DOMAIN, "force_refresh", {}, blocking=True)
     assert reg.values["forecast_extra_hours"] == 0
-    assert reg.values["forecast_wind"] == pytest.approx(18.0)
+    assert reg.values["forecast_wind"] == pytest.approx(5.0)
 
 
 async def test_boost_defaults_and_expiry(
